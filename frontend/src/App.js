@@ -87,7 +87,7 @@ function App() {
     });
 
     newSocket.on('stop_typing', (data) => {
-      setTypingUsers(typingUsers.filter(user => user !== data.username));
+      setTypingUsers(prev => prev.filter(user => user !== data.username));
     });
 
     newSocket.on('user_joined', (data) => {
@@ -370,12 +370,7 @@ function App() {
     }
   };
 
-  const openAvatarModal = () => {
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-    setUserAvatar(currentUser.avatar || '');
-    setTempAvatar(currentUser.avatar || '');
-    setShowAvatarModal(true);
-  };
+
 
   const joinRoom = (channel) => {
     console.log('joinRoom called for channel:', channel, 'current room:', room);
@@ -442,10 +437,7 @@ function App() {
     }
   };
 
-  const getReactionUsers = (reactions, emoji) => {
-    if (!reactions) return [];
-    return reactions.filter(r => r.emoji === emoji).map(r => r.username);
-  };
+
 
   const hasUserReacted = (reactions, emoji) => {
     if (!reactions) return false;
