@@ -90,10 +90,9 @@ app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Find user by email or username (case-insensitive)
-    const exactMatchRegex = new RegExp(`^${email}$`, 'i');
+    // Find user by email or username (case-sensitive)
     const user = await User.findOne({ 
-      $or: [{ email: exactMatchRegex }, { username: exactMatchRegex }] 
+      $or: [{ email: email }, { username: email }] 
     });
 
     if (!user) {
