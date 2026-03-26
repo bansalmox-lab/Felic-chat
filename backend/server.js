@@ -43,7 +43,9 @@ const authenticateToken = (req, res, next) => {
 // Protected routes
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    let { username, email, password } = req.body;
+    username = username ? username.toLowerCase() : username;
+    email = email ? email.toLowerCase() : email;
 
     // Check if user already exists
     const existingUser = await User.findOne({ 
@@ -88,7 +90,8 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+    email = email ? email.toLowerCase() : email;
 
     // Find user by email or username (case-sensitive)
     const user = await User.findOne({ 
