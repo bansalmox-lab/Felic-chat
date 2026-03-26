@@ -552,7 +552,7 @@ function App() {
                   placeholder="Enter your email or username"
                   value={tempUsername}
                   onChange={(e) => {
-                    setTempUsername(e.target.value);
+                    setTempUsername(e.target.value.toLowerCase());
                     setLoginError('');
                   }}
                   onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
