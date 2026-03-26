@@ -90,8 +90,11 @@ app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Find user by email or username
-    const user = await User.findOne({ $or: [{ email: email }, { username: email }] });
+    // Find user by email or username (case-insensitive)
+    const exactMatchRegex = new RegExp(`^${email}$`, 'i');
+    const user = await User.findOne({ 
+      $or: [{ email: exactMatchRegex }, { username: exactMatchRegex }] 
+    });
 
     if (!user) {
       return res.status(401).json({ 
