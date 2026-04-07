@@ -11,6 +11,7 @@ const User = require("./User");
 const app = express();
 app.use(cors({ origin: process.env.FRONTEND_URL || "*" }));
 app.use(express.json());
+app.get("/", (req, res) => res.send("Felic Chat Backend is Live!"));
 
 // Live users tracking
 const liveUsers = new Map(); // socketId -> userId
