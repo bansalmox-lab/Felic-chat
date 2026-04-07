@@ -4,11 +4,12 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+require("dotenv").config();
 const Message = require("./database-hybrid");
 const User = require("./User");
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: process.env.FRONTEND_URL || "*" }));
 app.use(express.json());
 
 // Live users tracking
@@ -31,7 +32,7 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ message: 'No token provided' });
   }
 
-  jwt.verify(token, 'secretkey', (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET || 'secretkey', (err, user) => {
     if (err) {
       return res.status(401).json({ message: 'Invalid token' });
     }
@@ -68,7 +69,7 @@ app.post('/api/register', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       { id: newUser._id, username: newUser.username },
-      'secretkey',
+      process.env.JWT_SECRET || 'secretkey',
       { expiresIn: '7d' }
     );
 
@@ -134,7 +135,7 @@ app.post('/api/login', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       { id: user._id, username: user.username },
-      'secretkey',
+      process.env.JWT_SECRET || 'secretkey',
       { expiresIn: '24h' }
     );
 
@@ -289,7 +290,7 @@ io.on("connection", (socket) => {
   socket.on("authenticate", async (userData) => {
     try {
       // Verify JWT token
-      const decoded = jwt.verify(userData.token, 'secretkey');
+      const decoded = jwt.verify(userData.token, process.env.JWT_SECRET || 'secretkey');
       let user = await User.findById(decoded.id);
       
       if (!user) {
