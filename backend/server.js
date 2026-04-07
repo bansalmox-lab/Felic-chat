@@ -83,7 +83,25 @@ app.post('/api/register', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Registration error details:', {
+      name: error.name,
+      message: error.message,
+      errors: error.errors ? Object.keys(error.errors) : []
+    });
+
+    // Handle Mongoose validation errors (e.g., username too long, email invalid)
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        message: 'Validation failed: ' + messages.join(', ')
+      });
+    }
+
+    // Handle MongoDB duplicate key errors
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'User already exists with this email or username' });
+    }
+
     res.status(500).json({ message: 'Server error during registration' });
   }
 });
