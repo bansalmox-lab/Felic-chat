@@ -26,17 +26,19 @@ function TitleBar() {
         </div>
       </div>
       
-      <div className="titlebar-controls">
-        <button className="control-btn minimize" onClick={handleMinimize} aria-label="Minimize">
-          <span>&minus;</span>
-        </button>
-        <button className="control-btn maximize" onClick={handleMaximize} aria-label="Maximize">
-          <span>&#9723;</span>
-        </button>
-        <button className="control-btn close" onClick={handleClose} aria-label="Close">
-          <span>&#10005;</span>
-        </button>
-      </div>
+      {electron && (
+        <div className="titlebar-controls">
+          <button className="control-btn minimize" onClick={handleMinimize} aria-label="Minimize">
+            <span>&minus;</span>
+          </button>
+          <button className="control-btn maximize" onClick={handleMaximize} aria-label="Maximize">
+            <span>&#9723;</span>
+          </button>
+          <button className="control-btn close" onClick={handleClose} aria-label="Close">
+            <span>&#10005;</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

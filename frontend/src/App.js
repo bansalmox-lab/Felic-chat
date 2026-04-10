@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import './App.css';
+import TitleBar from './TitleBar';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
@@ -615,6 +616,7 @@ function App() {
 
   return (
     <div className="App">
+      <TitleBar />
       {!isLoggedIn ? (
         <div className="login-container">
           <div className="login-panel">
