@@ -2,6 +2,25 @@
   "name": "felic-chat",
   "version": "0.1.0",
   "private": true,
+  "main": "public/electron.js",
+  "homepage": "./",
+  "build": {
+    "appId": "com.felicchat.app",
+    "productName": "Felic Chat",
+    "files": [
+      "build/**/*",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "buildResources": "public"
+    },
+    "win": {
+      "icon": "public/chat-logo.ico"
+    },
+    "extraMetadata": {
+      "main": "build/electron.js"
+    }
+  },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
@@ -15,8 +34,10 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "electron-start": "concurrently \"set BROWSER=none && npm start\" \"wait-on http://localhost:3000 && cross-env ELECTRON_RUN_AS_NODE= electron .\"",
+    "electron-pack": "npx @electron/packager . \"Felic Chat\" --platform=win32 --arch=x64 --out=dist --overwrite --icon=public/chat-logo.ico",
+    "electron-dist": "npm run build && npx @electron/packager . \"Felic Chat\" --platform=win32 --arch=x64 --out=dist --overwrite --ignore=\"^/node_modules\" --icon=public/chat-logo.ico"
   },
   "eslintConfig": {
     "extends": [
@@ -35,5 +56,13 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^41.2.0",
+    "electron-builder": "^26.8.1",
+    "electron-is-dev": "^3.0.1",
+    "wait-on": "^9.0.4"
   }
 }

@@ -197,6 +197,30 @@
   transform: translateY(-1px);
 }
 
+.delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1.5px dashed #ffa8a8;
+  border-radius: 13px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s ease;
+  opacity: 0.5;
+  margin-left: auto; /* Push to the far right of the reactions flex container */
+}
+
+.delete-btn:hover {
+  background: #fff0f0;
+  border-color: #ff4757;
+  border-style: solid;
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
 /* Emoji picker — inline, displayed in a wrapping row */
 .emoji-picker {
   display: flex;
@@ -522,7 +546,8 @@
 }
 
 .App-header {
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -534,6 +559,7 @@
   position: relative;
   box-sizing: border-box;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  overflow: hidden;
 }
 
 .header-top {
@@ -548,21 +574,29 @@
 .header-title {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0;
 }
 
 .chat-logo {
-  width: 35px;
-  height: 35px;
-  border-radius: 6px;
-  object-fit: cover;
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
   vertical-align: middle;
+  margin-left: -15px;
+  transition: transform 0.3s ease;
+}
+
+.chat-logo:hover {
+  transform: scale(1.05);
 }
 
 .header-top h1 {
   margin: 0;
   color: white;
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 54px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  letter-spacing: -1px;
 }
 
 .header-controls {
@@ -601,6 +635,7 @@
   width: 100%;
   max-width: 1200px;
   flex: 1;
+  min-height: 0;
   background: rgba(255,255,255,0.98);
   border-radius: 16px;
   overflow: hidden;
@@ -682,6 +717,7 @@
 
 .main-chat {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: #ffffff;
@@ -994,4 +1030,190 @@
     transform: scale(1);
     opacity: 1;
   }
+}
+
+/* ===== File Upload Styles ===== */
+
+/* Attach button in the message bar */
+.attach-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  background: #f1f3f5;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.attach-btn:hover {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
+/* Upload preview strip above the message input */
+.upload-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  margin-bottom: 6px;
+  background: #f8f5ff;
+  border: 1px solid #e0d4f5;
+  border-radius: 10px;
+  animation: fadeSlideUp 0.2s ease-out;
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.preview-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 2px solid #e0d4f5;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.preview-info {
+  flex: 1;
+  font-size: 13px;
+  color: #555;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.remove-preview {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: #ff4757;
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.remove-preview:hover {
+  background: #ff3838;
+  transform: scale(1.1);
+}
+
+/* File attachment block inside a chat message */
+.file-attachment {
+  margin-top: 8px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.image-attachment {
+  max-width: 280px;
+  max-height: 220px;
+  border-radius: 10px;
+  object-fit: cover;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: block;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.image-attachment:hover {
+  transform: scale(1.03);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+}
+
+.document-attachment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.85);
+  border: 1px solid #e1e4e8;
+  border-radius: 10px;
+  text-decoration: none;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.document-attachment:hover {
+  background: #f8f5ff;
+  border-color: #764ba2;
+  box-shadow: 0 2px 10px rgba(118,75,162,0.12);
+}
+
+.file-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-meta {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+}
+
+/* Loading dots animation for upload-in-progress */
+.loading-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: white;
+  animation: loadPulse 1.2s infinite ease-in-out;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes loadPulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40%           { opacity: 1;   transform: scale(1.1); }
+}
+
+/* ===== Message input container ===== */
+.message-input-container {
+  padding: 10px 16px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
 }

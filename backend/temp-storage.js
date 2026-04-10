@@ -45,6 +45,14 @@ const Message = {
       }
     }
     return messages[idx];
+  },
+
+  findByIdAndDelete: async function(id) {
+    const idx = messages.findIndex(m => m._id === id);
+    if (idx === -1) return null;
+    const deleted = messages[idx];
+    messages.splice(idx, 1);
+    return deleted;
   }
 };
 

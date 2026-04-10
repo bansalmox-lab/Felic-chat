@@ -1,0 +1,68 @@
+.titlebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 32px;
+  background: #1a1a2e; /* Dark theme to match sidebar */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  user-select: none;
+  z-index: 9999;
+}
+
+.titlebar-drag-region {
+  /* This makes the window draggable */
+  -webkit-app-region: drag;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+}
+
+.titlebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.titlebar-logo img {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+
+.titlebar-controls {
+  display: flex;
+  height: 100%;
+  /* This ensures buttons can be clicked */
+  -webkit-app-region: no-drag;
+}
+
+.control-btn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 46px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  color: #b9bbbe;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.control-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.control-btn.close:hover {
+  background: #ed4245; /* Windows red close button standard */
+  color: #fff;
+}

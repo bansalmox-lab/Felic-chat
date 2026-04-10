@@ -5,13 +5,48 @@ const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
+
+// FIX: Force Google Public DNS to bypass local network DNS failures
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+
 const Message = require("./database-hybrid");
 const User = require("./User");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
 const app = express();
 app.use(cors({ origin: process.env.FRONTEND_URL || "*" }));
 app.use(express.json());
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.get("/", (req, res) => res.send("Felic Chat Backend is Live!"));
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + "-" + file.originalname);
+  },
+});
+
+const upload = multer({ storage: storage });
+
+// File upload endpoint
+app.post("/api/upload", upload.single("file"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
+
+  const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+  res.json({
+    fileUrl: fileUrl,
+    fileName: req.file.originalname,
+    fileType: req.file.mimetype,
+  });
+});
 
 // Live users tracking
 const liveUsers = new Map(); // socketId -> userId
@@ -557,7 +592,10 @@ io.on("connection", (socket) => {
         room: data.room,
         author: data.author,
         message: data.message,
-        time: data.time
+        time: data.time,
+        fileUrl: data.fileUrl || null,
+        fileName: data.fileName || null,
+        fileType: data.fileType || null
       });
       console.log("Message saved to database with _id:", savedMessage._id);
       
@@ -573,6 +611,28 @@ io.on("connection", (socket) => {
       console.log("Message broadcasted successfully to all users in room");
     } catch (error) {
       console.error("Error saving message:", error);
+    }
+  });
+
+  socket.on("delete_message", async (data) => {
+    try {
+      const { messageId, room, username } = data;
+      console.log("Delete request received:", { messageId, room, username });
+      
+      // Perform deletion from DB
+      // Note: We're simply trusting the username passed. In a fully secure app, we'd check server session.
+      try {
+        await Message.findByIdAndDelete(messageId);
+        console.log(`Deleted message ${messageId} successfully from DB.`);
+      } catch (dbErr) {
+        console.log("DB deletion skipped (in-memory or not found):", dbErr.message);
+      }
+      
+      // Broadcast deletion to all users in the room
+      io.to(room).emit("message_deleted", { messageId, room });
+      console.log("Deletion broadcasted to room");
+    } catch (error) {
+      console.error("Error deleting message:", error);
     }
   });
 

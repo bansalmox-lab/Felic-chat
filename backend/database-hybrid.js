@@ -17,6 +17,9 @@ const connectDB = async () => {
       author: String,
       message: String,
       time: String,
+      fileUrl: String,
+      fileName: String,
+      fileType: String,
       createdAt: { type: Date, default: Date.now }
     });
     
@@ -39,6 +42,7 @@ const DBWrapper = {
   find: (...args) => Message.find(...args),
   create: (...args) => Message.create(...args),
   findByIdAndUpdate: (...args) => Message.findByIdAndUpdate(...args),
+  findByIdAndDelete: (...args) => Message.findByIdAndDelete(...args),
 };
 
 module.exports = DBWrapper;

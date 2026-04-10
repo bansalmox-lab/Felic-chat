@@ -26,6 +26,10 @@ function App() {
   const [userAvatar, setUserAvatar] = useState('');
   const [tempAvatar, setTempAvatar] = useState('');
   const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
   const currentRoomRef = useRef(''); // Always holds the current room for use in socket reconnect
 
@@ -164,6 +168,17 @@ function App() {
       setLiveUsers(data.users);
     });
 
+    newSocket.on('message_deleted', (data) => {
+      console.log('Message deleted event received:', data);
+      setRoomChats(prev => {
+        const roomMsgs = prev[data.room] || [];
+        return {
+          ...prev,
+          [data.room]: roomMsgs.filter(msg => msg._id !== data.messageId)
+        };
+      });
+    });
+
     return () => newSocket.close();
   }, []);
 
@@ -214,30 +229,70 @@ function App() {
     return () => clearTimeout(typingTimeout);
   }, [message, socket, room, username]);
 
-  const sendMessage = () => {
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const uploadFile = async () => {
+    if (!selectedFile) return null;
+    
+    setIsUploading(true);
+    setUploadProgress(0);
+    
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) throw new Error('Upload failed');
+      
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload file');
+      return null;
+    } finally {
+      setIsUploading(false);
+      setSelectedFile(null);
+    }
+  };
+
+  const sendMessage = async () => {
     console.log('sendMessage called:', { message, room, username, socketConnected: !!socket });
-    if (message.trim() && socket && room) {
+    
+    let fileData = null;
+    if (selectedFile) {
+      fileData = await uploadFile();
+      if (!fileData) return; // Stop if upload failed
+    }
+
+    if ((message.trim() || fileData) && socket && room) {
       const messageData = {
         message: message,
         author: username,
         room: room,
         timestamp: new Date().toISOString(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        fileUrl: fileData ? fileData.fileUrl : null,
+        fileName: fileData ? fileData.fileName : null,
+        fileType: fileData ? fileData.fileType : null
       };
       
       console.log('Sending message data:', messageData);
       
-      // Send to server for broadcasting to all users and saving to database
       socket.emit('message', messageData);
       socket.emit('stop_typing', {room, username});
       setMessage('');
+      setSelectedFile(null);
       console.log('Message sent to server');
-    } else {
-      console.log('Message not sent - missing data:', { 
-        hasMessage: !!message.trim(), 
-        hasSocket: !!socket, 
-        hasRoom: !!room 
-      });
     }
   };
 
@@ -379,6 +434,7 @@ function App() {
       return;
     }
     setRoom(channel);
+    currentRoomRef.current = channel;
     if (socket) {
       socket.emit("join_room", channel);
     }
@@ -434,6 +490,18 @@ function App() {
       }
     } else {
       addReaction(messageId, emoji);
+    }
+  };
+
+  const deleteMessage = (messageId) => {
+    if (socket && room && messageId) {
+      if (window.confirm("Are you sure you want to delete this message?")) {
+        socket.emit("delete_message", {
+          messageId: messageId,
+          room: room,
+          username: username
+        });
+      }
     }
   };
 
@@ -496,6 +564,20 @@ function App() {
             title="Add reaction"
           >
             😊
+          </button>
+        )}
+
+        {/* Delete button — shown on hover if the current user is the author */}
+        {isHovered && message._id && message.author === username && (
+          <button
+            className="delete-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteMessage(message._id);
+            }}
+            title="Delete Message"
+          >
+            🗑️
           </button>
         )}
 
@@ -686,6 +768,31 @@ function App() {
                         </div>
                       )}
                       <div className="message-content">{msg.message}</div>
+                      {msg.fileUrl && (
+                        <div className="file-attachment">
+                          {msg.fileType && msg.fileType.startsWith('image/') ? (
+                            <img 
+                              src={msg.fileUrl} 
+                              alt={msg.fileName} 
+                              className="image-attachment"
+                              onClick={() => window.open(msg.fileUrl, '_blank')}
+                            />
+                          ) : (
+                            <a 
+                              href={msg.fileUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="document-attachment"
+                            >
+                              <span className="file-icon">📄</span>
+                              <div className="file-info">
+                                <span className="file-name">{msg.fileName}</span>
+                                <span className="file-meta">Click to download</span>
+                              </div>
+                            </a>
+                          )}
+                        </div>
+                      )}
                       {msg.author !== 'System' && renderReactions(msg)}
                     </div>
                   </div>
@@ -704,19 +811,56 @@ function App() {
                 )}
                 <div ref={chatEndRef} />
               </div>
-              <div className="message-input">
-                <input 
-                  type="text" 
-                  placeholder="Type a message..." 
-                  value={message}
-                  onChange={(e)=>{
-                    setMessage(e.target.value);
-                    if (socket && room) socket.emit("typing", {room, username});
-                  }}
-                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                  className="message-input-field"
-                />
-                <button onClick={sendMessage}>Send</button>
+              <div className="message-input-container">
+                {selectedFile && (
+                  <div className="upload-preview">
+                    {selectedFile.type.startsWith('image/') ? (
+                      <img 
+                        src={URL.createObjectURL(selectedFile)} 
+                        alt="Preview" 
+                        className="preview-thumb" 
+                      />
+                    ) : (
+                      <span className="file-icon">📄</span>
+                    )}
+                    <div className="preview-info">
+                      {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                    </div>
+                    <button className="remove-preview" onClick={() => setSelectedFile(null)}>×</button>
+                  </div>
+                )}
+                <div className="message-input">
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    style={{ display: 'none' }} 
+                    onChange={handleFileSelect}
+                  />
+                  <button 
+                    className="attach-btn" 
+                    onClick={() => fileInputRef.current.click()}
+                  >
+                    📎
+                  </button>
+                  <input 
+                    type="text" 
+                    placeholder="Type a message..." 
+                    value={message}
+                    onChange={(e)=>{
+                      setMessage(e.target.value);
+                      if (socket && room) socket.emit("typing", {room, username});
+                    }}
+                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                    className="message-input-field"
+                  />
+                  <button onClick={sendMessage} disabled={isUploading}>
+                    {isUploading ? (
+                      <div className="loading-dots">
+                        <span></span><span></span><span></span>
+                      </div>
+                    ) : 'Send'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 const dns = require('dns');
 
 // Test DNS resolution for MongoDB Atlas cluster
-dns.resolveSrv('_mongodb._tcp.Felicmedia.dgfvd2k.mongodb.net', (err, records) => {
+dns.resolveSrv('_mongodb._tcp.felicmedia2.gojruoc.mongodb.net', (err, records) => {
   if (err) {
     console.error('DNS Resolution Error:', err);
     return;
@@ -19,7 +19,7 @@ dns.resolveSrv('_mongodb._tcp.Felicmedia.dgfvd2k.mongodb.net', (err, records) =>
 });
 
 // Also test basic DNS lookup
-dns.resolve4('Felicmedia.dgfvd2k.mongodb.net', (err, addresses) => {
+dns.resolve4('felicmedia2.gojruoc.mongodb.net', (err, addresses) => {
   if (err) {
     console.error('Basic DNS Error:', err);
   } else if (addresses && addresses.length > 0) {
