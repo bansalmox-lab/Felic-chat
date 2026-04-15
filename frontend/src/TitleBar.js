@@ -22,7 +22,7 @@ function TitleBar() {
       <div className="titlebar-drag-region">
         <div className="titlebar-logo">
           <img src="/chat-logo.png" alt="Logo" />
-          <span>Felic Chat</span>
+          <span>FELIC CHAT</span>
         </div>
       </div>
       
