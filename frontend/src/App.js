@@ -52,15 +52,10 @@ function App() {
         try {
           const user = JSON.parse(userData);
           newSocket.emit('authenticate', { token, user });
-          // Re-join current room (or default to General) after reconnect
-          const roomToJoin = currentRoomRef.current || 'General';
-          setTimeout(() => {
-            newSocket.emit('join_room', roomToJoin);
-            if (!currentRoomRef.current) {
-              currentRoomRef.current = 'General';
-              setRoom('General');
-            }
-          }, 300);
+          // Re-join current room after reconnect (state-driven auto-join handles initial join)
+          if (currentRoomRef.current) {
+            setTimeout(() => newSocket.emit('join_room', currentRoomRef.current), 300);
+          }
           // Fetch live users shortly after so server has time to process auth
           setTimeout(() => {
             fetch(`${BACKEND_URL}/api/live-users`)
@@ -223,6 +218,20 @@ function App() {
     }
   }, []);
 
+  // Auto-join General channel when user logs in and socket is ready
+  useEffect(() => {
+    if (isLoggedIn && socket && !room) {
+      const defaultRoom = 'General';
+      console.log('Auto-joining default channel:', defaultRoom);
+      currentRoomRef.current = defaultRoom;
+      setRoom(defaultRoom);
+      // Emit join_room with a small delay to allow authenticate to be processed
+      setTimeout(() => {
+        socket.emit('join_room', defaultRoom);
+      }, 500);
+    }
+  }, [isLoggedIn, socket]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -348,12 +357,6 @@ function App() {
             token: data.token,
             user: data.user
           });
-          // Auto-join General after auth is processed
-          setTimeout(() => {
-            socket.emit('join_room', 'General');
-            currentRoomRef.current = 'General';
-            setRoom('General');
-          }, 400);
         }
         
         // Delay fetch so server processes authenticate event first
@@ -391,12 +394,6 @@ function App() {
               token: registerData.token,
               user: registerData.user
             });
-            // Auto-join General after auth is processed
-            setTimeout(() => {
-              socket.emit('join_room', 'General');
-              currentRoomRef.current = 'General';
-              setRoom('General');
-            }, 400);
           }
           
           // Delay fetch so server processes authenticate event first
