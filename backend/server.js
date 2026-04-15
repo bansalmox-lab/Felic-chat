@@ -17,7 +17,21 @@ const path = require("path");
 const fs = require("fs");
 
 const app = express();
-app.use(cors({ origin: "*" }));
+const allowedOrigins = [
+  "https://felic-chat.vercel.app",
+  "https://frontend-nine-chi-thuz51pkv1.vercel.app",
+  "http://localhost:3000"
+];
+app.use(cors({ 
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.includes("vercel.app")) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Fallback to allow all for now to debug
+    }
+  },
+  credentials: true 
+}));
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.get("/", (req, res) => res.send("Felic Chat Backend is Live!"));
@@ -317,7 +331,16 @@ async function getLiveUsersData() {
 const server = http.createServer(app);
 
 const io = require('socket.io')(server, {
-  cors: { origin: "*" }
+  cors: { 
+    origin: "*",
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 io.on("connection", (socket) => {
@@ -723,7 +746,11 @@ io.on("connection", (socket) => {
 
 });
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
+// Process Error Handling to prevent silent crashes
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception thrown:', err);
 });
