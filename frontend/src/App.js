@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import io from 'socket.io-client';
 import './App.css';
 import TitleBar from './TitleBar';
@@ -17,7 +18,10 @@ function App() {
   const [loginError, setLoginError] = useState('');
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
+  const [pickerPosition, setPickerPosition] = useState({ top: 0, left: 0 });
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
+
+  const getMessageIdentifier = (msg) => msg._id || `${msg.author}-${msg.time}-${msg.message}`;
   const emojiPickerRef = useRef(null);
   const channels = ['General', 'Sales', 'Marketing', 'Design', 'Tech'];
   const [roomChats, setRoomChats] = useState({});
@@ -48,17 +52,22 @@ function App() {
         try {
           const user = JSON.parse(userData);
           newSocket.emit('authenticate', { token, user });
-          // Re-join current room so messages still work after reconnect
-          if (currentRoomRef.current) {
-            newSocket.emit('join_room', currentRoomRef.current);
-          }
+          // Re-join current room (or default to General) after reconnect
+          const roomToJoin = currentRoomRef.current || 'General';
+          setTimeout(() => {
+            newSocket.emit('join_room', roomToJoin);
+            if (!currentRoomRef.current) {
+              currentRoomRef.current = 'General';
+              setRoom('General');
+            }
+          }, 300);
           // Fetch live users shortly after so server has time to process auth
           setTimeout(() => {
             fetch(`${BACKEND_URL}/api/live-users`)
               .then(r => r.json())
               .then(d => { if (d.users) setLiveUsers(d.users); })
               .catch(() => {});
-          }, 500);
+          }, 600);
         } catch (e) {}
       }
     });
@@ -129,7 +138,7 @@ function App() {
         return {
           ...prev,
           [data.room]: roomMsgs.map(msg =>
-            (msg._id && msg._id === data.messageId)
+            (getMessageIdentifier(msg) === data.messageId)
               ? {
                   ...msg,
                   reactions: [...(msg.reactions || []), {
@@ -151,7 +160,7 @@ function App() {
         return {
           ...prev,
           [data.room]: roomMsgs.map(msg =>
-            (msg._id && msg._id === data.messageId)
+            (getMessageIdentifier(msg) === data.messageId)
               ? {
                   ...msg,
                   reactions: (msg.reactions || []).filter(
@@ -175,7 +184,7 @@ function App() {
         const roomMsgs = prev[data.room] || [];
         return {
           ...prev,
-          [data.room]: roomMsgs.filter(msg => msg._id !== data.messageId)
+          [data.room]: roomMsgs.filter(msg => getMessageIdentifier(msg) !== data.messageId)
         };
       });
     });
@@ -339,10 +348,16 @@ function App() {
             token: data.token,
             user: data.user
           });
+          // Auto-join General after auth is processed
+          setTimeout(() => {
+            socket.emit('join_room', 'General');
+            currentRoomRef.current = 'General';
+            setRoom('General');
+          }, 400);
         }
         
         // Delay fetch so server processes authenticate event first
-        setTimeout(fetchLiveUsers, 600);
+        setTimeout(fetchLiveUsers, 800);
       } else {
         const registerResponse = await fetch(`${BACKEND_URL}/api/register`, {
           method: 'POST',
@@ -376,10 +391,16 @@ function App() {
               token: registerData.token,
               user: registerData.user
             });
+            // Auto-join General after auth is processed
+            setTimeout(() => {
+              socket.emit('join_room', 'General');
+              currentRoomRef.current = 'General';
+              setRoom('General');
+            }, 400);
           }
           
           // Delay fetch so server processes authenticate event first
-          setTimeout(fetchLiveUsers, 600);
+          setTimeout(fetchLiveUsers, 800);
         } else {
           setLoginError(registerData.message || 'Registration failed');
           setIsCheckingUsername(false);
@@ -481,7 +502,7 @@ function App() {
   };
 
   const toggleReaction = (messageId, emoji) => {
-    const message = (roomChats[room] || []).find(msg => msg._id === messageId);
+    const message = (roomChats[room] || []).find(msg => getMessageIdentifier(msg) === messageId);
     if (message && message.reactions) {
       const hasReacted = message.reactions.some(r => r.emoji === emoji && r.username === username);
       if (hasReacted) {
@@ -522,15 +543,12 @@ function App() {
     }
   };
 
-  const commonEmojis = ['👍', '❤️', '😂', '😮', '😢', '😡', '🎉', '🔥', '👀', '✅', '😍', '🙏', '💯', '🚀', '😎', '🤔'];
+  const commonEmojis = ['👍', '❤️', '😂', '😮', '😢', '😡', '🎉', '🔥', '👀', '✅', '😍', '🙏', '💯', '🚀', '😎', '🤔', '🌟', '👏', '🙌', '💡'];
 
   const renderReactions = (message) => {
     const hasReactions = message.reactions && message.reactions.length > 0;
-    const isHovered = hoveredMessageId === message._id;
-    const isPickerOpen = showEmojiPicker === message._id;
 
-    // Only render the block if hovered, picker open, or there are existing reactions
-    if (!hasReactions && !isHovered && !isPickerOpen) return null;
+    if (!hasReactions) return null;
 
     const emojiCounts = {};
     if (hasReactions) {
@@ -546,60 +564,53 @@ function App() {
           <button
             key={emoji}
             className={`reaction-btn ${hasUserReacted(message.reactions, emoji) ? 'reacted' : ''}`}
-            onClick={() => message._id && toggleReaction(message._id, emoji)}
+            onClick={() => toggleReaction(getMessageIdentifier(message), emoji)}
             title={`${emoji} · ${users.join(', ')}`}
           >
             <span className="reaction-emoji">{emoji}</span>
             <span className="reaction-count">{users.length}</span>
           </button>
         ))}
+      </div>
+    );
+  };
 
-        {/* Add-reaction trigger — shown on hover or when picker is open */}
-        {(isHovered || isPickerOpen || hasReactions) && message._id && (
+  const renderMessageActions = (message) => {
+    const msgId = getMessageIdentifier(message);
+    const isHovered = hoveredMessageId === msgId;
+    const isPickerOpen = showEmojiPicker === msgId;
+
+    if (!isHovered && !isPickerOpen) return null;
+
+    return (
+      <div className="message-actions">
+        <button
+          className={`action-btn ${isPickerOpen ? 'active' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isPickerOpen) {
+              setShowEmojiPicker(null);
+            } else {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setPickerPosition({ top: rect.bottom + window.scrollY, left: Math.max(10, rect.left - 200 + window.scrollX) });
+              setShowEmojiPicker(msgId);
+            }
+          }}
+          title="Add reaction"
+        >
+          ➕
+        </button>
+        {message.author === username && (
           <button
-            className={`add-reaction-btn ${isPickerOpen ? 'active' : ''}`}
+            className="action-btn delete-btn"
             onClick={(e) => {
               e.stopPropagation();
-              setShowEmojiPicker(isPickerOpen ? null : message._id);
-            }}
-            title="Add reaction"
-          >
-            😊
-          </button>
-        )}
-
-        {/* Delete button — shown on hover if the current user is the author */}
-        {isHovered && message._id && message.author === username && (
-          <button
-            className="delete-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              deleteMessage(message._id);
+              deleteMessage(msgId);
             }}
             title="Delete Message"
           >
             🗑️
           </button>
-        )}
-
-        {/* Inline emoji picker */}
-        {isPickerOpen && (
-          <div className="emoji-picker" ref={emojiPickerRef}>
-            {commonEmojis.map(emoji => (
-              <button
-                key={emoji}
-                className="emoji-option"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleReaction(message._id, emoji);
-                  setShowEmojiPicker(null);
-                }}
-                title={emoji}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
         )}
       </div>
     );
@@ -748,7 +759,7 @@ function App() {
                   <div
                     key={index}
                     className={`message ${msg.author === username ? 'sent' : msg.author === 'System' ? 'system' : 'received'}`}
-                    onMouseEnter={() => msg._id && setHoveredMessageId(msg._id)}
+                    onMouseEnter={() => setHoveredMessageId(getMessageIdentifier(msg))}
                     onMouseLeave={() => setHoveredMessageId(null)}
                   >
                     {msg.author !== 'System' && (
@@ -796,6 +807,7 @@ function App() {
                         </div>
                       )}
                       {msg.author !== 'System' && renderReactions(msg)}
+                      {msg.author !== 'System' && renderMessageActions(msg)}
                     </div>
                   </div>
                 ))}
@@ -963,6 +975,31 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+      {showEmojiPicker && createPortal(
+        <div 
+          className="emoji-picker-container" 
+          ref={emojiPickerRef}
+          style={{ top: pickerPosition.top, left: pickerPosition.left, position: 'absolute', zIndex: 10000 }}
+        >
+          <div className="emoji-picker">
+            {commonEmojis.map(emoji => (
+              <button
+                key={emoji}
+                className="emoji-option"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleReaction(showEmojiPicker, emoji);
+                  setShowEmojiPicker(null);
+                }}
+                title={emoji}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

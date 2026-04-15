@@ -22,6 +22,10 @@ const Message = {
       author: data.author,
       message: data.message,
       time: data.time,
+      fileUrl: data.fileUrl || null,
+      fileName: data.fileName || null,
+      fileType: data.fileType || null,
+      reactions: data.reactions || [],
       createdAt: new Date()
     };
     messages.push(message);
@@ -29,7 +33,7 @@ const Message = {
   },
 
   findByIdAndUpdate: async function(id, update) {
-    const idx = messages.findIndex(m => m._id === id);
+    const idx = messages.findIndex(m => m._id === id || `${m.author}-${m.time}-${m.message}` === id);
     if (idx === -1) return null;
     if (update.$push) {
       const [key, val] = Object.entries(update.$push)[0];
@@ -48,7 +52,7 @@ const Message = {
   },
 
   findByIdAndDelete: async function(id) {
-    const idx = messages.findIndex(m => m._id === id);
+    const idx = messages.findIndex(m => m._id === id || `${m.author}-${m.time}-${m.message}` === id);
     if (idx === -1) return null;
     const deleted = messages[idx];
     messages.splice(idx, 1);
