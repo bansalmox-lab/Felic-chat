@@ -33,7 +33,7 @@ function App() {
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  // const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
   const currentRoomRef = useRef(''); // Always holds the current room for use in socket reconnect
@@ -259,7 +259,7 @@ function App() {
     if (!selectedFile) return null;
     
     setIsUploading(true);
-    setUploadProgress(0);
+    // setUploadProgress(0);
     
     const formData = new FormData();
     formData.append('file', selectedFile);
