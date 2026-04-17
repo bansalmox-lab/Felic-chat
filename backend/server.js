@@ -268,15 +268,15 @@ app.get('/api/live-users', async (req, res) => {
     for (let [userId, socketInfo] of activeUsers) {
       const user = await User.findById(userId);
       if (user) {
-        const { password, ...userWithoutPassword } = user;
+        const userObj = user.toJSON();
         liveUserData.push({
-          id: userWithoutPassword._id,
-          username: userWithoutPassword.username,
-          email: userWithoutPassword.email,
-          avatar: userWithoutPassword.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userWithoutPassword.username)}&background=random`,
+          id: userObj._id,
+          username: userObj.username,
+          email: userObj.email,
+          avatar: userObj.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userObj.username)}&background=random`,
           isActive: true,
           lastSeen: new Date(),
-          createdAt: userWithoutPassword.createdAt,
+          createdAt: userObj.createdAt,
           socketCount: socketInfo.sockets.length
         });
       }
@@ -428,15 +428,15 @@ async function getLiveUsersData() {
   for (let [userId, socketInfo] of activeUsers) {
     const user = await User.findById(userId);
     if (user) {
-      const { password, ...userWithoutPassword } = user;
+      const userObj = user.toJSON();
       liveUserData.push({
-        id: userWithoutPassword._id,
-        username: userWithoutPassword.username,
-        email: userWithoutPassword.email,
-        avatar: userWithoutPassword.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userWithoutPassword.username)}&background=random`,
+        id: userObj._id,
+        username: userObj.username,
+        email: userObj.email,
+        avatar: userObj.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userObj.username)}&background=random`,
         isActive: true,
         lastSeen: new Date(),
-        createdAt: userWithoutPassword.createdAt,
+        createdAt: userObj.createdAt,
         socketCount: socketInfo.sockets.length
       });
     }
