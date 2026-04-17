@@ -46,7 +46,7 @@ const messageSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-const Message = mongoose.model("Message", messageSchema);
+const Message = mongoose.models.Message || mongoose.model("Message", messageSchema);
 
 const userSchema = new mongoose.Schema({
   username: String,
@@ -54,7 +54,7 @@ const userSchema = new mongoose.Schema({
   password: String
 });
 
-const User = mongoose.model("User", userSchema);
+const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 const channelSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true, trim: true },
@@ -62,6 +62,6 @@ const channelSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-const Channel = mongoose.model("Channel", channelSchema);
+const Channel = mongoose.models.Channel || mongoose.model("Channel", channelSchema);
 
 module.exports = { Message, User, Channel };
