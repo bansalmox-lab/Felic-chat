@@ -14,6 +14,7 @@ dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const Message = require("./database-hybrid");
 const User = require("./User");
+const { Channel } = require("./database");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -147,9 +148,17 @@ app.post('/api/register', async (req, res) => {
       password // password will be hashed via User.js pre-save hook
     });
 
+    // Determine if this user is admin
+    const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
+    const isAdmin = adminEmail && newUser.email.toLowerCase() === adminEmail;
+    if (isAdmin && !newUser.isAdmin) {
+      newUser.isAdmin = true;
+      await newUser.save();
+    }
+
     // Generate JWT token
     const token = jwt.sign(
-      { id: newUser._id, username: newUser.username },
+      { id: newUser._id, username: newUser.username, isAdmin },
       process.env.JWT_SECRET || 'secretkey',
       { expiresIn: '7d' }
     );
@@ -160,7 +169,8 @@ app.post('/api/register', async (req, res) => {
       user: {
         id: newUser._id,
         username: newUser.username,
-        email: newUser.email
+        email: newUser.email,
+        isAdmin
       }
     });
 
@@ -213,9 +223,17 @@ app.post('/api/login', async (req, res) => {
       });
     }
 
+    // Determine if this user is admin
+    const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
+    const isAdmin = adminEmail && user.email.toLowerCase() === adminEmail;
+    // Sync isAdmin field in DB
+    if (isAdmin !== user.isAdmin) {
+      user.isAdmin = isAdmin;
+    }
+
     // Generate JWT token
     const token = jwt.sign(
-      { id: user._id, username: user.username },
+      { id: user._id, username: user.username, isAdmin },
       process.env.JWT_SECRET || 'secretkey',
       { expiresIn: '24h' }
     );
@@ -231,7 +249,8 @@ app.post('/api/login', async (req, res) => {
         id: user._id,
         username: user.username,
         email: user.email,
-        avatar: user.avatar
+        avatar: user.avatar,
+        isAdmin
       }
     });
 
@@ -302,6 +321,73 @@ app.get('/api/users', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// ===== Channel REST Endpoints =====
+
+// GET /api/channels — fetch all channels
+app.get('/api/channels', async (req, res) => {
+  try {
+    const channels = await Channel.find({}).sort({ createdAt: 1 });
+    res.json({ channels: channels.map(c => c.name) });
+  } catch (e) {
+    // Fallback to defaults if DB not available
+    res.json({ channels: ['General', 'Sales', 'Marketing', 'Design', 'Tech'] });
+  }
+});
+
+// POST /api/channels — admin only: create channel
+app.post('/api/channels', authenticateToken, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ message: 'Channel name required' });
+    // Only admin
+    const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
+    const user = await User.findById(req.user.id);
+    if (!user || user.email.toLowerCase() !== adminEmail) {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    const channel = await Channel.create({ name: name.trim(), createdBy: user.username });
+    // Broadcast to all connected clients
+    io.emit('channel_created', { name: channel.name });
+    res.status(201).json({ channel: channel.name });
+  } catch (e) {
+    if (e.code === 11000) return res.status(400).json({ message: 'Channel already exists' });
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// DELETE /api/channels/:name — admin only: delete channel
+app.delete('/api/channels/:name', authenticateToken, async (req, res) => {
+  try {
+    const { name } = req.params;
+    if (name.toLowerCase() === 'general') return res.status(400).json({ message: 'Cannot delete General channel' });
+    const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
+    const user = await User.findById(req.user.id);
+    if (!user || user.email.toLowerCase() !== adminEmail) {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    await Channel.deleteOne({ name });
+    io.emit('channel_deleted', { name });
+    res.json({ message: 'Channel deleted' });
+  } catch (e) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Seed default channels if empty
+async function seedChannels() {
+  try {
+    const count = await Channel.countDocuments();
+    if (count === 0) {
+      const defaults = ['General', 'Sales', 'Marketing', 'Design', 'Tech'];
+      await Channel.insertMany(defaults.map(name => ({ name, createdBy: 'System' })));
+      console.log('Default channels seeded.');
+    }
+  } catch (e) {
+    console.error('Channel seeding skipped (DB not ready):', e.message);
+  }
+}
+seedChannels();
 
 // Protected route example
 app.get('/api/profile', authenticateToken, async (req, res) => {
@@ -490,8 +576,20 @@ io.on("connection", (socket) => {
     try {
       const { room, usernameToKick } = data;
       console.log("Kick request from", socket.id, "for user:", usernameToKick, "in room:", room);
-      
-      // Find the user being kicked
+
+      // ── Server-side admin verification ──────────────────────────────────────
+      const kickerInfo = activeUsers.get(socket.userId);
+      if (!kickerInfo || !kickerInfo.user) {
+        return socket.emit("kick_error", { message: "Not authenticated" });
+      }
+      const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
+      if (!adminEmail || kickerInfo.user.email.toLowerCase() !== adminEmail) {
+        console.log(`Non-admin kick attempt blocked from user: ${kickerInfo.user.username}`);
+        return socket.emit("kick_error", { message: "Admin access required to kick users" });
+      }
+      // ────────────────────────────────────────────────────────────────────────
+
+
       let targetSocketId = null;
       let targetUserId = null;
       

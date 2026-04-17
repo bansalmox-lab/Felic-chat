@@ -27,6 +27,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: "https://ui-avatars.com/api/?name=User&background=random"
   },
+  isAdmin: {
+    type: Boolean,
+    default: false
+  },
   isActive: {
     type: Boolean,
     default: true
@@ -55,7 +59,7 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 userSchema.methods.toJSON = function() {
   const user = this.toObject();
   delete user.password;
-  return user;
+  return user; // includes isAdmin
 };
 
 const User = mongoose.model("User", userSchema);

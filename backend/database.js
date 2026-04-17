@@ -56,4 +56,12 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", userSchema);
 
-module.exports = { Message, User };
+const channelSchema = new mongoose.Schema({
+  name: { type: String, required: true, unique: true, trim: true },
+  createdBy: { type: String, default: 'System' },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Channel = mongoose.model("Channel", channelSchema);
+
+module.exports = { Message, User, Channel };

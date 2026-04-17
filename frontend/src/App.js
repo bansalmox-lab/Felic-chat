@@ -24,7 +24,10 @@ function App() {
 
   const getMessageIdentifier = (msg) => msg._id || `${msg.author}-${msg.time}-${msg.message}`;
   const emojiPickerRef = useRef(null);
-  const channels = ['General', 'Sales', 'Marketing', 'Design', 'Tech'];
+  const [channels, setChannels] = useState(['General', 'Sales', 'Marketing', 'Design', 'Tech']);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [newChannelName, setNewChannelName] = useState('');
   const [roomChats, setRoomChats] = useState({});
   const [typingUsers, setTypingUsers] = useState([]);
   const [password, setPassword] = useState('');
@@ -82,6 +85,14 @@ function App() {
         ...prev,
         [data.room]: [...(prev[data.room] || []), data]
       }));
+    });
+
+    newSocket.on('channel_created', (data) => {
+      setChannels(prev => prev.includes(data.name) ? prev : [...prev, data.name]);
+    });
+
+    newSocket.on('channel_deleted', (data) => {
+      setChannels(prev => prev.filter(c => c !== data.name));
     });
 
     newSocket.on('typing_users', (users) => {
@@ -225,14 +236,17 @@ function App() {
         const user = JSON.parse(userData);
         setUsername(user.username);
         setUserAvatar(user.avatar || '');
+        setIsAdmin(user.isAdmin || false);
         setIsLoggedIn(true);
+        // Fetch fresh channels on restore
+        fetchChannels();
       } catch (error) {
         console.error('Error parsing user data:', error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-join General channel when user logs in and socket is ready
   useEffect(() => {
@@ -362,6 +376,7 @@ function App() {
         
         setUsername(data.user.username);
         setUserAvatar(data.user.avatar || '');
+        setIsAdmin(data.user.isAdmin || false);
         setIsLoggedIn(true);
         setIsCheckingUsername(false);
         setTempUsername('');
@@ -377,6 +392,7 @@ function App() {
         
         // Delay fetch so server processes authenticate event first
         setTimeout(fetchLiveUsers, 800);
+        fetchChannels();
       } else {
         const registerResponse = await fetch(`${BACKEND_URL}/api/register`, {
           method: 'POST',
@@ -399,6 +415,7 @@ function App() {
           
           setUsername(registerData.user.username);
           setUserAvatar(registerData.user.avatar || '');
+          setIsAdmin(registerData.user.isAdmin || false);
           setIsLoggedIn(true);
           setIsCheckingUsername(false);
           setTempUsername('');
@@ -414,6 +431,7 @@ function App() {
           
           // Delay fetch so server processes authenticate event first
           setTimeout(fetchLiveUsers, 800);
+          fetchChannels();
         } else {
           setLoginError(registerData.message || 'Registration failed');
           setIsCheckingUsername(false);
@@ -434,6 +452,7 @@ function App() {
     setPassword('');
     setUserAvatar('');
     setTempAvatar('');
+    setIsAdmin(false);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     
@@ -478,11 +497,8 @@ function App() {
   const fetchLiveUsers = async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/live-users`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
-
       if (response.ok) {
         const data = await response.json();
         setLiveUsers(data.users);
@@ -490,6 +506,49 @@ function App() {
     } catch (error) {
       console.error('Error fetching live users:', error);
     }
+  };
+
+  const fetchChannels = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/channels`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.channels && data.channels.length > 0) setChannels(data.channels);
+      }
+    } catch (e) { /* keep defaults */ }
+  };
+
+  const createChannel = async () => {
+    const name = newChannelName.trim();
+    if (!name) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/channels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ name })
+      });
+      if (res.ok) {
+        setNewChannelName('');
+      } else {
+        const d = await res.json();
+        alert(d.message || 'Failed to create channel');
+      }
+    } catch (e) { alert('Server error'); }
+  };
+
+  const deleteChannel = async (name) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/channels/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        alert(d.message || 'Failed to delete channel');
+      }
+    } catch (e) { alert('Server error'); }
   };
 
   const addReaction = (messageId, emoji) => {
@@ -773,6 +832,15 @@ function App() {
                 👥 Live Users ({liveUsers ? liveUsers.length : 0})
               </button>
               {room && <span className="current-room">#{room}</span>}
+              {isAdmin && (
+                <button
+                  className="admin-btn"
+                  onClick={() => setShowAdminPanel(true)}
+                  title="Admin Panel"
+                >
+                  ⚙️ Admin
+                </button>
+              )}
             </div>
           </div>
           <div className="chat-container">
@@ -1014,6 +1082,74 @@ function App() {
             </div>
             <div className="modal-buttons">
               <button onClick={() => setShowUsersModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showAdminPanel && (
+        <div className="modal-overlay" onClick={() => setShowAdminPanel(false)}>
+          <div className="admin-panel" onClick={e => e.stopPropagation()}>
+            <div className="admin-panel-header">
+              <h2>⚙️ Admin Panel</h2>
+              <button className="modal-close-btn" onClick={() => setShowAdminPanel(false)}>✕</button>
+            </div>
+
+            <div className="admin-section">
+              <h3 className="admin-section-title">👥 Kick Users</h3>
+              <div className="admin-user-list">
+                {liveUsers.filter(u => u.username !== username).length === 0 && (
+                  <div className="admin-empty">No other users online</div>
+                )}
+                {liveUsers.filter(u => u.username !== username).map(user => (
+                  <div key={user.id} className="admin-user-row">
+                    <img
+                      src={user.avatar}
+                      alt={user.username}
+                      className="admin-user-avatar"
+                      onError={e => e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
+                    />
+                    <span className="admin-user-name">{user.username}</span>
+                    <button
+                      className="admin-kick-btn"
+                      onClick={() => { kickUser(user.username); }}
+                    >
+                      👢 Kick
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="admin-divider" />
+
+            <div className="admin-section">
+              <h3 className="admin-section-title">📢 Manage Channels</h3>
+              <div className="admin-channel-create">
+                <input
+                  className="admin-channel-input"
+                  type="text"
+                  placeholder="New channel name..."
+                  value={newChannelName}
+                  onChange={e => setNewChannelName(e.target.value)}
+                  onKeyPress={e => e.key === 'Enter' && createChannel()}
+                />
+                <button className="admin-create-btn" onClick={createChannel}>+ Create</button>
+              </div>
+              <div className="admin-channel-list">
+                {channels.map(ch => (
+                  <div key={ch} className="admin-channel-row">
+                    <span className="admin-channel-hash">#</span>
+                    <span className="admin-channel-name">{ch}</span>
+                    {ch !== 'General' && (
+                      <button
+                        className="admin-delete-btn"
+                        onClick={() => deleteChannel(ch)}
+                        title={`Delete #${ch}`}
+                      >✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

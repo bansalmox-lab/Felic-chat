@@ -1351,3 +1351,325 @@
   background: #f9fafb;
   border-top: 1px solid #e5e7eb;
 }
+
+/* ===== Admin Button (Header) ===== */
+.admin-btn {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(240, 147, 251, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(240, 147, 251, 0.45);
+  filter: brightness(1.08);
+}
+
+.admin-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(240, 147, 251, 0.3);
+}
+
+/* ===== Admin Panel Modal ===== */
+.admin-panel {
+  background: linear-gradient(160deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 540px;
+  max-height: 82vh;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.05) inset;
+  backdrop-filter: blur(20px);
+  color: #f0f4ff;
+  animation: adminPanelIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.admin-panel::-webkit-scrollbar {
+  width: 5px;
+}
+
+.admin-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+@keyframes adminPanelIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.admin-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: sticky;
+  top: 0;
+  background: linear-gradient(160deg, #1a1a2e 0%, #16213e 100%);
+  z-index: 1;
+  border-radius: 20px 20px 0 0;
+}
+
+.admin-panel-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.modal-close-btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  transform: rotate(90deg);
+}
+
+/* ===== Admin Sections ===== */
+.admin-section {
+  padding: 20px 24px;
+}
+
+.admin-section-title {
+  margin: 0 0 16px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.admin-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.07);
+  margin: 0 24px;
+}
+
+.admin-empty {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px 0;
+  font-style: italic;
+}
+
+/* ===== Admin User List ===== */
+.admin-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-user-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.admin-user-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.13);
+}
+
+.admin-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+}
+
+.admin-user-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e8ecf8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-kick-btn {
+  background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: 0 3px 8px rgba(255, 65, 108, 0.3);
+  letter-spacing: 0.3px;
+}
+
+.admin-kick-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(255, 65, 108, 0.45);
+  filter: brightness(1.1);
+}
+
+.admin-kick-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 5px rgba(255, 65, 108, 0.3);
+}
+
+/* ===== Admin Channel Management ===== */
+.admin-channel-create {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.admin-channel-input {
+  flex: 1;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: white;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.admin-channel-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.admin-channel-input:focus {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(240, 147, 251, 0.5);
+  box-shadow: 0 0 0 3px rgba(240, 147, 251, 0.1);
+}
+
+.admin-create-btn {
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+}
+
+.admin-create-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.45);
+}
+
+.admin-create-btn:active {
+  transform: translateY(0);
+}
+
+.admin-channel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-channel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.admin-channel-row:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.admin-channel-hash {
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+}
+
+.admin-channel-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #e0e4f0;
+}
+
+.admin-delete-btn {
+  background: rgba(255, 65, 108, 0.12);
+  color: #ff6b8a;
+  border: 1px solid rgba(255, 65, 108, 0.25);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.admin-delete-btn:hover {
+  background: rgba(255, 65, 108, 0.25);
+  border-color: rgba(255, 65, 108, 0.5);
+  color: #ff4757;
+  transform: scale(1.1);
+}
+
+.admin-delete-btn:active {
+  transform: scale(0.95);
+}
