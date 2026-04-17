@@ -4,6 +4,8 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const axios = require("axios");
+const cheerio = require("cheerio");
 require("dotenv").config();
 
 // FIX: Force Google Public DNS to bypass local network DNS failures
@@ -47,6 +49,35 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
+
+// Helper to extract first URL from text
+const extractFirstUrl = (text) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const match = text.match(urlRegex);
+  return match ? match[0] : null;
+};
+
+// Helper to fetch Open Graph metadata
+const fetchLinkPreview = async (url) => {
+  try {
+    const { data: html } = await axios.get(url, { 
+      timeout: 5000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
+    });
+    const $ = cheerio.load(html);
+    
+    return {
+      title: $('meta[property="og:title"]').attr('content') || $('title').text() || null,
+      description: $('meta[property="og:description"]').attr('content') || $('meta[name="description"]').attr('content') || null,
+      image: $('meta[property="og:image"]').attr('content') || null,
+      siteName: $('meta[property="og:site_name"]').attr('content') || null,
+      url: url
+    };
+  } catch (error) {
+    console.error(`Error fetching preview for ${url}:`, error.message);
+    return null;
+  }
+};
 
 // File upload endpoint
 app.post("/api/upload", upload.single("file"), (req, res) => {
@@ -618,8 +649,26 @@ io.on("connection", (socket) => {
         time: data.time,
         fileUrl: data.fileUrl || null,
         fileName: data.fileName || null,
-        fileType: data.fileType || null
+        fileType: data.fileType || null,
+        linkPreview: null
       });
+
+      // Async fetch preview if a link is detected
+      const firstUrl = extractFirstUrl(data.message);
+      if (firstUrl) {
+        fetchLinkPreview(firstUrl).then(async (preview) => {
+          if (preview) {
+            savedMessage.linkPreview = preview;
+            await savedMessage.save();
+            // Emit a special update for this message specifically for the preview
+            io.to(data.room).emit("message_preview_update", {
+              messageId: savedMessage._id,
+              linkPreview: preview
+            });
+          }
+        });
+      }
+
       console.log("Message saved to database with _id:", savedMessage._id);
       
       // Broadcast the saved message (includes _id) so clients can use it for reactions

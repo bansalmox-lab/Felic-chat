@@ -26,6 +26,23 @@ const messageSchema = new mongoose.Schema({
   author: String,
   message: String,
   time: String,
+  fileUrl: String,
+  fileName: String,
+  fileType: String,
+  reactions: [
+    {
+      emoji: String,
+      username: String,
+      timestamp: { type: Date, default: Date.now }
+    }
+  ],
+  linkPreview: {
+    title: String,
+    description: String,
+    image: String,
+    url: String,
+    siteName: String
+  },
   createdAt: { type: Date, default: Date.now }
 });
 

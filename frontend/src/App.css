@@ -151,8 +151,12 @@
 .reaction-btn:hover {
   background: #ededf5;
   border-color: #764ba2;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(118,75,162,0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(118,75,162,0.1);
+}
+
+.reaction-btn:active {
+  transform: scale(0.95);
 }
 
 .reaction-btn.reacted {
@@ -160,11 +164,18 @@
   color: white;
   border-color: transparent;
   box-shadow: 0 2px 8px rgba(102,126,234,0.4);
+  animation: reactionPop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes reactionPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
 }
 
 .reaction-btn.reacted:hover {
   opacity: 0.9;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 .reaction-emoji {
@@ -179,48 +190,168 @@
   text-align: center;
 }
 
-/* New Action Menu */
-.message-actions {
-  position: absolute;
-  top: -16px;
-  right: 15px;
-  display: flex;
-  background: white;
+/* Link Preview Card */
+.link-preview-card {
+  margin: 10px 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid #e1e4e8;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 2px;
-  z-index: 10;
-  animation: actionsPop 0.1s ease-out;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  max-width: 450px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  animation: previewFadeIn 0.3s ease-out;
 }
 
-@keyframes actionsPop {
-  0% { opacity: 0; transform: scale(0.95); }
-  100% { opacity: 1; transform: scale(1); }
+@keyframes previewFadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.link-preview-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(118, 75, 162, 0.12);
+  border-color: #764ba2;
+  background: #ffffff;
+}
+
+.link-preview-image {
+  width: 100%;
+  max-height: 240px;
+  overflow: hidden;
+  border-bottom: 1px solid #e1e4e8;
+  background: #f8f9fa;
+}
+
+.link-preview-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.link-preview-card:hover .link-preview-image img {
+  transform: scale(1.02);
+}
+
+.link-preview-content {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.link-preview-site {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #764ba2;
+  font-weight: 700;
+}
+
+.link-preview-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a2e;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.link-preview-description {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Optimized Message Action Toolbar */
+.message-actions-wrapper {
+  position: absolute;
+  top: -24px;
+  right: 15px;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(225, 228, 232, 0.5);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+  padding: 4px;
+  z-index: 1000;
+  animation: actionsFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s ease;
+}
+
+@keyframes actionsFadeIn {
+  0% { opacity: 0; transform: translateY(5px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.message-actions-wrapper.is-confirming {
+  border-color: #ff4757;
+  background: #fffcfc;
+}
+
+.message-actions {
+  display: flex;
+  gap: 2px;
 }
 
 .action-btn {
   background: transparent;
   border: none;
   border-radius: 4px;
-  padding: 4px 6px;
+  padding: 4px 8px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
   color: #555;
-  transition: background 0.15s ease;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.action-btn:hover,
+.action-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
 .action-btn.active {
-  background: #f0f0f0;
+  background: rgba(118, 75, 162, 0.1);
+  color: #764ba2;
 }
 
 .action-btn.delete-btn {
-  opacity: 1;
   color: #ff4757;
+  font-weight: 500;
 }
 
-.action-btn.delete-btn:hover {
+.action-btn.delete-btn.confirming {
+  background: #ff4757;
+  color: white;
+  padding: 4px 10px;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  animation: pulseDelete 1s infinite alternate;
+}
+
+@keyframes pulseDelete {
+  from { opacity: 0.85; }
+  to { opacity: 1; transform: scale(1.05); }
+}
+
+.action-btn.delete-btn:hover:not(.confirming) {
   background: #ffecec;
 }
 
@@ -732,16 +863,15 @@
 
 .messages {
   flex: 1;
-  padding: 16px;
+  padding: 32px 16px 16px;
   overflow-y: auto;
+  overflow-x: visible;
   display: flex;
   flex-direction: column;
   gap: 8px;
   scroll-behavior: smooth;
   scrollbar-width: thin;
   scrollbar-color: #e1e8ed transparent;
-  will-change: scroll-position;
-  contain: layout style paint;
 }
 
 .message {
@@ -751,9 +881,8 @@
   padding: 6px 10px;
   border-radius: 8px;
   max-width: 75%;
-  contain: layout style paint;
-  transform: translateZ(0);
   position: relative;
+  overflow: visible !important;
 }
 
 .message-avatar {

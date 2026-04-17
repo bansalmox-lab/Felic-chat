@@ -20,6 +20,7 @@ function App() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
   const [pickerPosition, setPickerPosition] = useState({ top: 0, left: 0 });
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   const getMessageIdentifier = (msg) => msg._id || `${msg.author}-${msg.time}-${msg.message}`;
   const emojiPickerRef = useRef(null);
@@ -181,6 +182,21 @@ function App() {
           ...prev,
           [data.room]: roomMsgs.filter(msg => getMessageIdentifier(msg) !== data.messageId)
         };
+      });
+    });
+
+    newSocket.on('message_preview_update', (data) => {
+      console.log('Link preview update received:', data);
+      setRoomChats(prev => {
+        const result = { ...prev };
+        Object.keys(result).forEach(roomName => {
+          result[roomName] = result[roomName].map(msg => 
+            getMessageIdentifier(msg) === data.messageId 
+              ? { ...msg, linkPreview: data.linkPreview } 
+              : msg
+          );
+        });
+        return result;
       });
     });
 
@@ -514,13 +530,12 @@ function App() {
 
   const deleteMessage = (messageId) => {
     if (socket && room && messageId) {
-      if (window.confirm("Are you sure you want to delete this message?")) {
-        socket.emit("delete_message", {
-          messageId: messageId,
-          room: room,
-          username: username
-        });
-      }
+      socket.emit("delete_message", {
+        messageId: messageId,
+        room: room,
+        username: username
+      });
+      setDeleteConfirmId(null);
     }
   };
 
@@ -576,39 +591,68 @@ function App() {
     const msgId = getMessageIdentifier(message);
     const isHovered = hoveredMessageId === msgId;
     const isPickerOpen = showEmojiPicker === msgId;
+    const isDeleting = deleteConfirmId === msgId;
 
     if (!isHovered && !isPickerOpen) return null;
 
     return (
-      <div className="message-actions">
-        <button
-          className={`action-btn ${isPickerOpen ? 'active' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (isPickerOpen) {
-              setShowEmojiPicker(null);
-            } else {
-              const rect = e.currentTarget.getBoundingClientRect();
-              setPickerPosition({ top: rect.bottom + window.scrollY, left: Math.max(10, rect.left - 200 + window.scrollX) });
-              setShowEmojiPicker(msgId);
-            }
-          }}
-          title="Add reaction"
-        >
-          ➕
-        </button>
-        {message.author === username && (
+      <div className={`message-actions-wrapper ${isDeleting ? 'is-confirming' : ''}`}>
+        <div className="message-actions">
           <button
-            className="action-btn delete-btn"
+            className={`action-btn ${isPickerOpen ? 'active' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
-              deleteMessage(msgId);
+              if (isPickerOpen) {
+                setShowEmojiPicker(null);
+              } else {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setPickerPosition({ top: rect.bottom + window.scrollY, left: Math.max(10, rect.left - 200 + window.scrollX) });
+                setShowEmojiPicker(msgId);
+              }
             }}
-            title="Delete Message"
+            title="Add reaction"
           >
-            🗑️
+            ➕
           </button>
+          {message.author === username && (
+            <button
+              className={`action-btn delete-btn ${isDeleting ? 'confirming' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isDeleting) {
+                  deleteMessage(msgId);
+                } else {
+                  setDeleteConfirmId(msgId);
+                  // Auto-cancel after 3 seconds
+                  setTimeout(() => setDeleteConfirmId(null), 3000);
+                }
+              }}
+              title={isDeleting ? "Click again to confirm" : "Delete Message"}
+            >
+              {isDeleting ? "Confirm?" : "🗑️"}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderLinkPreview = (message) => {
+    const preview = message.linkPreview;
+    if (!preview) return null;
+
+    return (
+      <div className="link-preview-card" onClick={() => window.open(preview.url, '_blank')}>
+        {preview.image && (
+          <div className="link-preview-image">
+            <img src={preview.image} alt={preview.title} onError={(e) => e.target.style.display = 'none'} />
+          </div>
         )}
+        <div className="link-preview-content">
+          {preview.siteName && <div className="link-preview-site">{preview.siteName}</div>}
+          <div className="link-preview-title">{preview.title}</div>
+          {preview.description && <div className="link-preview-description">{preview.description}</div>}
+        </div>
       </div>
     );
   };
@@ -804,6 +848,7 @@ function App() {
                         </div>
                       )}
                       {msg.author !== 'System' && renderReactions(msg)}
+                      {msg.linkPreview && renderLinkPreview(msg)}
                       {msg.author !== 'System' && renderMessageActions(msg)}
                     </div>
                   </div>
