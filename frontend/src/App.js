@@ -32,6 +32,9 @@ function App() {
   const [typingUsers, setTypingUsers] = useState([]);
   const [password, setPassword] = useState('');
   const [liveUsers, setLiveUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [usersSearchQuery, setUsersSearchQuery] = useState('');
+  const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [userAvatar, setUserAvatar] = useState('');
   const [tempAvatar, setTempAvatar] = useState('');
   const [showAvatarModal, setShowAvatarModal] = useState(false);
@@ -508,6 +511,40 @@ function App() {
     }
   };
 
+  const fetchAllUsers = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/users`, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAllUsers(data.users);
+      }
+    } catch (error) {
+      console.error('Error fetching all users:', error);
+    }
+  };
+
+  const deleteAccount = async (userToDelete) => {
+    if (!window.confirm(`Are you sure you want to permanently delete ${userToDelete} from the database?`)) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/users/${encodeURIComponent(userToDelete)}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchAllUsers();
+        fetchLiveUsers();
+      } else {
+        const d = await res.json();
+        alert(d.message || 'Failed to delete user');
+      }
+    } catch (e) {
+      alert('Server error while deleting');
+    }
+  };
+
   const fetchChannels = async () => {
     try {
       const res = await fetch(`${BACKEND_URL}/api/channels`);
@@ -835,7 +872,10 @@ function App() {
               {isAdmin && (
                 <button
                   className="admin-btn"
-                  onClick={() => setShowAdminPanel(true)}
+                  onClick={() => {
+                    setShowAdminPanel(true);
+                    fetchAllUsers();
+                  }}
                   title="Admin Panel"
                 >
                   ⚙️ Admin
@@ -1047,8 +1087,15 @@ function App() {
         <div className="modal-overlay">
           <div className="modal users-modal">
             <h3>Live Users ({liveUsers ? liveUsers.length : 0})</h3>
+            <input 
+              type="text" 
+              className="user-search-bar" 
+              placeholder="Search users..." 
+              value={usersSearchQuery} 
+              onChange={e => setUsersSearchQuery(e.target.value)} 
+            />
             <div className="users-list">
-              {(liveUsers || []).map((user) => (
+              {(liveUsers || []).filter(u => u.username.toLowerCase().includes(usersSearchQuery.toLowerCase())).map((user) => (
                 <div key={user.id} className="user-card">
                   <div className="user-avatar">
                     <img 
@@ -1095,28 +1142,50 @@ function App() {
             </div>
 
             <div className="admin-section">
-              <h3 className="admin-section-title">👥 Kick Users</h3>
+              <h3 className="admin-section-title">👥 Manage All Users</h3>
+              <input 
+                type="text" 
+                className="admin-search-bar" 
+                placeholder="Search registered users..." 
+                value={adminSearchQuery} 
+                onChange={e => setAdminSearchQuery(e.target.value)} 
+              />
               <div className="admin-user-list">
-                {liveUsers.filter(u => u.username !== username).length === 0 && (
-                  <div className="admin-empty">No other users online</div>
+                {allUsers.filter(u => u.username !== username && u.username.toLowerCase().includes(adminSearchQuery.toLowerCase())).length === 0 && (
+                  <div className="admin-empty">No users found</div>
                 )}
-                {liveUsers.filter(u => u.username !== username).map(user => (
-                  <div key={user.id} className="admin-user-row">
-                    <img
-                      src={user.avatar}
-                      alt={user.username}
-                      className="admin-user-avatar"
-                      onError={e => e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
-                    />
-                    <span className="admin-user-name">{user.username}</span>
-                    <button
-                      className="admin-kick-btn"
-                      onClick={() => { kickUser(user.username); }}
-                    >
-                      👢 Kick
-                    </button>
-                  </div>
-                ))}
+                {allUsers.filter(u => u.username !== username && u.username.toLowerCase().includes(adminSearchQuery.toLowerCase())).map(user => {
+                  const isOnline = liveUsers.some(lu => lu.username === user.username);
+                  return (
+                    <div key={user.id} className="admin-user-row">
+                      <img
+                        src={user.avatar}
+                        alt={user.username}
+                        className="admin-user-avatar"
+                        onError={e => e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
+                      />
+                      <span className="admin-user-name">
+                        {user.username}
+                        <span className={`admin-status-dot ${isOnline ? 'online' : 'offline'}`} title={isOnline ? "Online" : "Offline"}></span>
+                      </span>
+                      {isOnline && (
+                        <button
+                          className="admin-kick-btn"
+                          onClick={() => { kickUser(user.username); }}
+                        >
+                          👢 Kick
+                        </button>
+                      )}
+                      <button
+                        className="admin-delete-account-btn"
+                        onClick={() => deleteAccount(user.username)}
+                        title="Delete User Account"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

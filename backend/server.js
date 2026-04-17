@@ -322,6 +322,53 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
+// DELETE /api/users/:username - admin only: delete user
+app.delete('/api/users/:username', authenticateToken, async (req, res) => {
+  try {
+    const { username } = req.params;
+    const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
+    const requestingUser = await User.findById(req.user.id);
+    
+    if (!requestingUser || requestingUser.email.toLowerCase() !== adminEmail) {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    
+    const userToDelete = await User.findOne({ username: username });
+    if (!userToDelete) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Prevent admin from deleting themselves
+    if (userToDelete.email.toLowerCase() === adminEmail) {
+      return res.status(403).json({ message: 'Cannot delete the main admin account' });
+    }
+    
+    await User.deleteOne({ username: username });
+    
+    // Kick them if they are online
+    for (let [userId, userSockets] of activeUsers) {
+      if (userSockets.user && userSockets.user.username === username) {
+        userSockets.sockets.forEach(socketId => {
+          const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.id === socketId);
+          if (targetSocket) targetSocket.disconnect(true);
+        });
+        activeUsers.delete(userId);
+        break;
+      }
+    }
+    
+    io.emit("live_users_update", {
+      users: await getLiveUsersData(),
+      total: activeUsers.size
+    });
+    
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ message: 'Server error while deleting user' });
+  }
+});
+
 // ===== Channel REST Endpoints =====
 
 // GET /api/channels — fetch all channels
