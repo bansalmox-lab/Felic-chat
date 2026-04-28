@@ -16,9 +16,19 @@ function App() {
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginError, setLoginError] = useState('');
-  const [loginErrorField, setLoginErrorField] = useState(''); // 'username' | 'password' | 'both' | ''
+  const [loginErrorField, setLoginErrorField] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [authMode, setAuthMode] = useState('signin'); // 'signin' | 'signup'
+  // Sign-up specific fields
+  const [suUsername, setSuUsername] = useState('');
+  const [suEmail, setSuEmail] = useState('');
+  const [suPassword, setSuPassword] = useState('');
+  const [suAvatar, setSuAvatar] = useState('');
+  const [suShowPassword, setSuShowPassword] = useState(false);
+  const [suError, setSuError] = useState('');
+  const [suErrorField, setSuErrorField] = useState('');
+  const [suLoading, setSuLoading] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
   const [pickerPosition, setPickerPosition] = useState({ top: 0, left: 0 });
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
@@ -505,6 +515,32 @@ function App() {
     }
   };
 
+  const handleSignUp = async () => {
+    setSuError(''); setSuErrorField('');
+    if (!suUsername.trim()) { setSuError('Username is required.'); setSuErrorField('username'); return; }
+    if (!suEmail.trim()) { setSuError('Email is required.'); setSuErrorField('email'); return; }
+    if (!suPassword.trim() || suPassword.length < 6) { setSuError('Password must be at least 6 characters.'); setSuErrorField('password'); return; }
+    setSuLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: suUsername.trim().toLowerCase(), email: suEmail.trim().toLowerCase(), password: suPassword, avatar: suAvatar.trim() || null })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuUsername(''); setSuEmail(''); setSuPassword(''); setSuAvatar(''); setSuShowPassword(false);
+        finishLogin(data.token, data.user);
+      } else {
+        const msg = (data.message || '').toLowerCase();
+        if (msg.includes('username')) { setSuError(data.message); setSuErrorField('username'); }
+        else if (msg.includes('email')) { setSuError(data.message); setSuErrorField('email'); }
+        else { setSuError(data.message || 'Registration failed.'); setSuErrorField('both'); }
+      }
+    } catch { setSuError('Cannot reach server. Check your connection.'); setSuErrorField('both'); }
+    finally { setSuLoading(false); }
+  };
+
   // Shared post-authentication logic (used for both login and auto-register)
   const finishLogin = (token, user) => {
     localStorage.setItem('token', token);
@@ -875,7 +911,6 @@ function App() {
       <TitleBar />
       {!isLoggedIn ? (
         <div className="login-container">
-          {/* Animated background orbs */}
           <div className="login-orb login-orb-1" />
           <div className="login-orb login-orb-2" />
           <div className="login-orb login-orb-3" />
@@ -901,136 +936,149 @@ function App() {
               </div>
             </div>
 
-            <h2 className="login-title">Sign in to your workspace</h2>
-            <p className="login-subtitle">New here? We'll create your account automatically.</p>
-
-            <div className="login-form">
-              {/* Username / Email */}
-              <div className="login-field">
-                <label className="login-label">Username or Email</label>
-                <div className="login-input-wrap">
-                  <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
-                    <path d="M10 10a4 4 0 100-8 4 4 0 000 8zM2 18c0-4 3.58-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder="you@example.com"
-                    value={tempUsername}
-                    onChange={(e) => { setTempUsername(e.target.value.toLowerCase()); clearLoginError(); }}
-                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                    className={`login-input${(loginErrorField === 'username' || loginErrorField === 'both') ? ' error' : ''}`}
-                    disabled={isCheckingUsername}
-                    autoComplete="username"
-                    id="login-username"
-                  />
-                </div>
-              </div>
-
-              {/* Password */}
-              <div className="login-field">
-                <label className="login-label">Password</label>
-                <div className="login-input-wrap">
-                  <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
-                    <rect x="3" y="9" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.6"/>
-                    <path d="M7 9V6a3 3 0 016 0v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                  </svg>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Min. 6 characters"
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); clearLoginError(); }}
-                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                    className={`login-input login-input-pw${(loginErrorField === 'password' || loginErrorField === 'both') ? ' error' : ''}`}
-                    disabled={isCheckingUsername}
-                    autoComplete="current-password"
-                    id="login-password"
-                  />
-                  <button
-                    type="button"
-                    className="login-pw-toggle"
-                    onClick={() => setShowPassword(v => !v)}
-                    tabIndex={-1}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? (
-                      <svg viewBox="0 0 20 20" fill="none">
-                        <path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" strokeWidth="1.6"/>
-                        <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6"/>
-                        <path d="M3 3l14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                      </svg>
-                    ) : (
-                      <svg viewBox="0 0 20 20" fill="none">
-                        <path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" strokeWidth="1.6"/>
-                        <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6"/>
-                      </svg>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Avatar URL + live preview */}
-              <div className="login-field">
-                <label className="login-label">Avatar URL <span className="login-optional">(optional)</span></label>
-                <div className="login-avatar-row">
-                  <div className="login-avatar-preview">
-                    <img
-                      src={tempAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(tempUsername || 'You')}&background=818cf8&color=fff`}
-                      alt="avatar preview"
-                      onError={(e) => { e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(tempUsername || 'You')}&background=818cf8&color=fff`; }}
-                    />
-                  </div>
-                  <div className="login-input-wrap login-avatar-input-wrap">
-                    <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
-                      <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.6"/>
-                      <path d="M6 14c.9-2 5.1-2 6 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                      <circle cx="10" cy="8" r="2" stroke="currentColor" strokeWidth="1.6"/>
-                    </svg>
-                    <input
-                      type="text"
-                      placeholder="https://..."
-                      value={tempAvatar}
-                      onChange={(e) => { setTempAvatar(e.target.value); setLoginError(''); }}
-                      onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                      className="login-input"
-                      disabled={isCheckingUsername}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {loginError && (
-                <div className="login-error">
-                  <svg viewBox="0 0 20 20" fill="none">
-                    <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.6"/>
-                    <path d="M10 6v4M10 14h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                  </svg>
-                  {loginError}
-                </div>
-              )}
-
+            {/* Tabs */}
+            <div className="auth-tabs">
               <button
-                onClick={handleLogin}
-                disabled={!tempUsername.trim() || !password.trim() || isCheckingUsername}
-                className="login-button"
-              >
-                {isCheckingUsername ? (
-                  <span className="login-spinner" />
-                ) : (
-                  <>
-                    Continue
-                    <svg viewBox="0 0 20 20" fill="none" style={{width:16,height:16,marginLeft:8}}>
-                      <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </>
-                )}
-              </button>
-
-              <div className="login-features">
-                <div className="login-feature"><span>⚡</span>Real-time messaging</div>
-                <div className="login-feature"><span>🔒</span>Secure &amp; private</div>
-                <div className="login-feature"><span>🌐</span>Multi-channel</div>
-              </div>
+                className={`auth-tab${authMode === 'signin' ? ' active' : ''}`}
+                onClick={() => { setAuthMode('signin'); clearLoginError(); }}
+              >Sign In</button>
+              <button
+                className={`auth-tab${authMode === 'signup' ? ' active' : ''}`}
+                onClick={() => { setAuthMode('signup'); setSuError(''); setSuErrorField(''); }}
+              >Sign Up</button>
             </div>
+
+            {/* ── SIGN IN PANEL ── */}
+            {authMode === 'signin' && (
+              <div className="login-form">
+                <div className="login-field">
+                  <label className="login-label">Username or Email</label>
+                  <div className="login-input-wrap">
+                    <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
+                      <path d="M10 10a4 4 0 100-8 4 4 0 000 8zM2 18c0-4 3.58-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                    </svg>
+                    <input type="text" placeholder="you@example.com" value={tempUsername}
+                      onChange={e => { setTempUsername(e.target.value.toLowerCase()); clearLoginError(); }}
+                      onKeyPress={e => e.key === 'Enter' && handleLogin()}
+                      className={`login-input${(loginErrorField==='username'||loginErrorField==='both')?' error':''}`}
+                      disabled={isCheckingUsername} autoComplete="username" />
+                  </div>
+                </div>
+                <div className="login-field">
+                  <label className="login-label">Password</label>
+                  <div className="login-input-wrap">
+                    <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
+                      <rect x="3" y="9" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.6"/>
+                      <path d="M7 9V6a3 3 0 016 0v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                    </svg>
+                    <input type={showPassword?'text':'password'} placeholder="Your password" value={password}
+                      onChange={e => { setPassword(e.target.value); clearLoginError(); }}
+                      onKeyPress={e => e.key === 'Enter' && handleLogin()}
+                      className={`login-input login-input-pw${(loginErrorField==='password'||loginErrorField==='both')?' error':''}`}
+                      disabled={isCheckingUsername} autoComplete="current-password" />
+                    <button type="button" className="login-pw-toggle" onClick={() => setShowPassword(v=>!v)} tabIndex={-1}>
+                      {showPassword
+                        ? <svg viewBox="0 0 20 20" fill="none"><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" strokeWidth="1.6"/><circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6"/><path d="M3 3l14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                        : <svg viewBox="0 0 20 20" fill="none"><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" strokeWidth="1.6"/><circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6"/></svg>
+                      }
+                    </button>
+                  </div>
+                </div>
+                {loginError && (
+                  <div className="login-error">
+                    <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.6"/><path d="M10 6v4M10 14h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                    {loginError}
+                  </div>
+                )}
+                <button onClick={handleLogin} disabled={!tempUsername.trim()||!password.trim()||isCheckingUsername} className="login-button">
+                  {isCheckingUsername ? <span className="login-spinner"/> : <>Sign In <svg viewBox="0 0 20 20" fill="none" style={{width:15,height:15,marginLeft:6}}><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></>}
+                </button>
+                <p className="auth-switch-text">Don't have an account? <button className="auth-switch-link" onClick={() => { setAuthMode('signup'); clearLoginError(); }}>Sign Up</button></p>
+              </div>
+            )}
+
+            {/* ── SIGN UP PANEL ── */}
+            {authMode === 'signup' && (
+              <div className="login-form">
+                <div className="login-field">
+                  <label className="login-label">Username</label>
+                  <div className="login-input-wrap">
+                    <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
+                      <path d="M10 10a4 4 0 100-8 4 4 0 000 8zM2 18c0-4 3.58-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                    </svg>
+                    <input type="text" placeholder="johndoe" value={suUsername}
+                      onChange={e => { setSuUsername(e.target.value.toLowerCase()); setSuError(''); setSuErrorField(''); }}
+                      onKeyPress={e => e.key==='Enter' && handleSignUp()}
+                      className={`login-input${(suErrorField==='username'||suErrorField==='both')?' error':''}`}
+                      disabled={suLoading} autoComplete="username" />
+                  </div>
+                </div>
+                <div className="login-field">
+                  <label className="login-label">Email</label>
+                  <div className="login-input-wrap">
+                    <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
+                      <rect x="2" y="5" width="16" height="11" rx="2" stroke="currentColor" strokeWidth="1.6"/>
+                      <path d="M2 7l8 5 8-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                    </svg>
+                    <input type="email" placeholder="you@example.com" value={suEmail}
+                      onChange={e => { setSuEmail(e.target.value.toLowerCase()); setSuError(''); setSuErrorField(''); }}
+                      onKeyPress={e => e.key==='Enter' && handleSignUp()}
+                      className={`login-input${(suErrorField==='email'||suErrorField==='both')?' error':''}`}
+                      disabled={suLoading} autoComplete="email" />
+                  </div>
+                </div>
+                <div className="login-field">
+                  <label className="login-label">Password</label>
+                  <div className="login-input-wrap">
+                    <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
+                      <rect x="3" y="9" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.6"/>
+                      <path d="M7 9V6a3 3 0 016 0v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                    </svg>
+                    <input type={suShowPassword?'text':'password'} placeholder="Min. 6 characters" value={suPassword}
+                      onChange={e => { setSuPassword(e.target.value); setSuError(''); setSuErrorField(''); }}
+                      onKeyPress={e => e.key==='Enter' && handleSignUp()}
+                      className={`login-input login-input-pw${(suErrorField==='password'||suErrorField==='both')?' error':''}`}
+                      disabled={suLoading} autoComplete="new-password" />
+                    <button type="button" className="login-pw-toggle" onClick={() => setSuShowPassword(v=>!v)} tabIndex={-1}>
+                      {suShowPassword
+                        ? <svg viewBox="0 0 20 20" fill="none"><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" strokeWidth="1.6"/><circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6"/><path d="M3 3l14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                        : <svg viewBox="0 0 20 20" fill="none"><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" strokeWidth="1.6"/><circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6"/></svg>
+                      }
+                    </button>
+                  </div>
+                </div>
+                <div className="login-field">
+                  <label className="login-label">Avatar URL <span className="login-optional">(optional)</span></label>
+                  <div className="login-avatar-row">
+                    <div className="login-avatar-preview">
+                      <img src={suAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(suUsername||'You')}&background=818cf8&color=fff`}
+                        alt="preview" onError={e => { e.target.src=`https://ui-avatars.com/api/?name=${encodeURIComponent(suUsername||'You')}&background=818cf8&color=fff`; }}/>
+                    </div>
+                    <div className="login-input-wrap login-avatar-input-wrap">
+                      <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
+                        <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.6"/>
+                        <path d="M6 14c.9-2 5.1-2 6 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                        <circle cx="10" cy="8" r="2" stroke="currentColor" strokeWidth="1.6"/>
+                      </svg>
+                      <input type="text" placeholder="https://..." value={suAvatar}
+                        onChange={e => setSuAvatar(e.target.value)}
+                        onKeyPress={e => e.key==='Enter' && handleSignUp()}
+                        className="login-input" disabled={suLoading} />
+                    </div>
+                  </div>
+                </div>
+                {suError && (
+                  <div className="login-error">
+                    <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.6"/><path d="M10 6v4M10 14h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                    {suError}
+                  </div>
+                )}
+                <button onClick={handleSignUp} disabled={!suUsername.trim()||!suEmail.trim()||!suPassword.trim()||suLoading} className="login-button">
+                  {suLoading ? <span className="login-spinner"/> : <>Create Account <svg viewBox="0 0 20 20" fill="none" style={{width:15,height:15,marginLeft:6}}><path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></>}
+                </button>
+                <p className="auth-switch-text">Already have an account? <button className="auth-switch-link" onClick={() => { setAuthMode('signin'); setSuError(''); setSuErrorField(''); }}>Sign In</button></p>
+              </div>
+            )}
           </div>
         </div>
       ) : (
