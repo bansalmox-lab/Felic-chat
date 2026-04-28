@@ -232,6 +232,32 @@
 }
 .login-error svg { width: 15px; height: 15px; flex-shrink: 0; }
 
+/* Password field with show/hide toggle */
+.login-input-pw {
+  padding-right: 44px; /* room for the toggle button */
+}
+.login-pw-toggle {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  color: rgba(255,255,255,0.35);
+  transition: color 0.2s ease;
+  border-radius: 6px;
+}
+.login-pw-toggle:hover {
+  color: #818cf8;
+}
+.login-pw-toggle svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
 /* Button */
 .login-button {
   width: 100%;

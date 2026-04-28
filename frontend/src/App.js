@@ -16,6 +16,8 @@ function App() {
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [loginErrorField, setLoginErrorField] = useState(''); // 'username' | 'password' | 'both' | ''
+  const [showPassword, setShowPassword] = useState(false);
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
   const [pickerPosition, setPickerPosition] = useState({ top: 0, left: 0 });
@@ -405,125 +407,124 @@ function App() {
 
   // handleLogout is defined below after handleLogin
 
+  const clearLoginError = () => { setLoginError(''); setLoginErrorField(''); };
+
   const handleLogin = async () => {
-    if (!tempUsername.trim() || !password.trim()) {
-      setLoginError('Please enter username and password');
+    // Client-side validation
+    if (!tempUsername.trim() && !password.trim()) {
+      setLoginError('Please enter your username/email and password.');
+      setLoginErrorField('both');
       return;
     }
-    
+    if (!tempUsername.trim()) {
+      setLoginError('Please enter your username or email.');
+      setLoginErrorField('username');
+      return;
+    }
+    if (!password.trim()) {
+      setLoginError('Please enter your password.');
+      setLoginErrorField('password');
+      return;
+    }
+    if (password.trim().length < 6) {
+      setLoginError('Password must be at least 6 characters.');
+      setLoginErrorField('password');
+      return;
+    }
+
     setIsCheckingUsername(true);
-    setLoginError('');
-    
+    clearLoginError();
+
+    const email = tempUsername.trim();
+
     try {
-      const email = tempUsername.trim();
-      
+      // ── Step 1: attempt login ────────────────────────────────
       const response = await fetch(`${BACKEND_URL}/api/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: email,
-          password: password.trim()
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: password.trim() })
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        
-        setUsername(data.user.username);
-        setUserAvatar(data.user.avatar || '');
-        setIsAdmin(data.user.isAdmin || false);
-        setIsLoggedIn(true);
-        setIsCheckingUsername(false);
-        setTempUsername('');
-        setPassword('');
-        setTempAvatar('');
-        
-        if (socket) {
-          socket.emit('authenticate', {
-            token: data.token,
-            user: data.user
-          });
-        }
-        
-        // Delay fetch so server processes authenticate event first
-        setTimeout(fetchLiveUsers, 800);
-        fetchAllUsers();
-        fetchChannels();
+        // ── Login succeeded ────────────────────────────────────
+        finishLogin(data.token, data.user);
+        return;
+      }
+
+      if (response.status === 401) {
+        // Wrong password for an existing account
+        setLoginError('Incorrect password. Please try again.');
+        setLoginErrorField('password');
+        return;
+      }
+
+      if (response.status !== 404) {
+        // Any other server error (not "user not found")
+        setLoginError(data.message || 'Login failed. Please try again.');
+        setLoginErrorField('both');
+        return;
+      }
+
+      // ── Step 2: user not found → auto-register ───────────────
+      console.log('User not found, attempting registration...');
+      const registerResponse = await fetch(`${BACKEND_URL}/api/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: email, // use the input value as username
+          email,
+          password: password.trim(),
+          avatar: tempAvatar.trim() || null
+        })
+      });
+
+      const registerData = await registerResponse.json();
+
+      if (registerResponse.ok) {
+        finishLogin(registerData.token, registerData.user);
       } else {
-        if (response.status === 404) {
-          // User not found - attempt auto-registration
-          console.log('User not found, attempting registration...');
-        } else if (response.status === 401) {
-          // Explicitly wrong password
-          setLoginError('Incorrect password. Please try again.');
-          setIsCheckingUsername(false);
-          return;
+        // Registration failed — most likely the account already exists (wrong password)
+        const alreadyExists = registerData.message && registerData.message.toLowerCase().includes('already exists');
+        if (alreadyExists) {
+          setLoginError('Account already exists. Check your password and try again.');
+          setLoginErrorField('password');
         } else {
-          setLoginError(data.message || 'Login failed');
-          setIsCheckingUsername(false);
-          return;
-        }
-
-        const registerResponse = await fetch(`${BACKEND_URL}/api/register`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            username: tempUsername.trim(),
-            email: email,
-            password: password.trim(),
-            avatar: tempAvatar.trim() || null
-          })
-        });
-
-        const registerData = await registerResponse.json();
-        
-        if (registerResponse.ok) {
-          localStorage.setItem('token', registerData.token);
-          localStorage.setItem('user', JSON.stringify(registerData.user));
-          
-          setUsername(registerData.user.username);
-          setUserAvatar(registerData.user.avatar || '');
-          setIsAdmin(registerData.user.isAdmin || false);
-          setIsLoggedIn(true);
-          setIsCheckingUsername(false);
-          setTempUsername('');
-          setPassword('');
-          setTempAvatar('');
-          
-          if (socket) {
-            socket.emit('authenticate', {
-              token: registerData.token,
-              user: registerData.user
-            });
-          }
-          
-          // Delay fetch so server processes authenticate event first
-          setTimeout(fetchLiveUsers, 800);
-          fetchAllUsers();
-          fetchChannels();
-        } else {
-          // If registration also fails, show the more relevant error
-          // If login gave 401 and register gave 400 (exists), then it was a wrong password.
-          if (registerData.message && registerData.message.includes('already exists')) {
-            setLoginError('Invalid password for this account.');
-          } else {
-            setLoginError(registerData.message || 'Authentication failed');
-          }
-          setIsCheckingUsername(false);
+          setLoginError(registerData.message || 'Could not create account. Please try again.');
+          setLoginErrorField('both');
         }
       }
     } catch (error) {
       console.error('Login error:', error);
-      setLoginError('Server error. Please try again.');
+      setLoginError('Cannot reach the server. Check your connection and try again.');
+      setLoginErrorField('both');
+    } finally {
+      // Always re-enable the button/form — success path calls setIsLoggedIn which unmounts this form
       setIsCheckingUsername(false);
     }
+  };
+
+  // Shared post-authentication logic (used for both login and auto-register)
+  const finishLogin = (token, user) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    setUsername(user.username);
+    setUserAvatar(user.avatar || '');
+    setIsAdmin(user.isAdmin || false);
+    setIsLoggedIn(true);
+    setTempUsername('');
+    setPassword('');
+    setTempAvatar('');
+    setShowPassword(false);
+    clearLoginError();
+    if (socket) {
+      socket.emit('authenticate', { token, user });
+    }
+    // Slight delay so the server has time to process the authenticate event
+    setTimeout(fetchLiveUsers, 800);
+    fetchAllUsers();
+    fetchChannels();
   };
 
   const handleLogout = () => {
@@ -915,11 +916,12 @@ function App() {
                     type="text"
                     placeholder="you@example.com"
                     value={tempUsername}
-                    onChange={(e) => { setTempUsername(e.target.value.toLowerCase()); setLoginError(''); }}
+                    onChange={(e) => { setTempUsername(e.target.value.toLowerCase()); clearLoginError(); }}
                     onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                    className={`login-input${loginError ? ' error' : ''}`}
+                    className={`login-input${(loginErrorField === 'username' || loginErrorField === 'both') ? ' error' : ''}`}
                     disabled={isCheckingUsername}
                     autoComplete="username"
+                    id="login-username"
                   />
                 </div>
               </div>
@@ -933,15 +935,36 @@ function App() {
                     <path d="M7 9V6a3 3 0 016 0v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
                   </svg>
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     placeholder="Min. 6 characters"
                     value={password}
-                    onChange={(e) => { setPassword(e.target.value); setLoginError(''); }}
+                    onChange={(e) => { setPassword(e.target.value); clearLoginError(); }}
                     onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                    className={`login-input${loginError ? ' error' : ''}`}
+                    className={`login-input login-input-pw${(loginErrorField === 'password' || loginErrorField === 'both') ? ' error' : ''}`}
                     disabled={isCheckingUsername}
                     autoComplete="current-password"
+                    id="login-password"
                   />
+                  <button
+                    type="button"
+                    className="login-pw-toggle"
+                    onClick={() => setShowPassword(v => !v)}
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <svg viewBox="0 0 20 20" fill="none">
+                        <path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" strokeWidth="1.6"/>
+                        <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6"/>
+                        <path d="M3 3l14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 20 20" fill="none">
+                        <path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" strokeWidth="1.6"/>
+                        <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6"/>
+                      </svg>
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -1006,7 +1029,6 @@ function App() {
                 <div className="login-feature"><span>⚡</span>Real-time messaging</div>
                 <div className="login-feature"><span>🔒</span>Secure &amp; private</div>
                 <div className="login-feature"><span>🌐</span>Multi-channel</div>
-              </div>
               </div>
             </div>
           </div>
