@@ -145,7 +145,8 @@ app.post('/api/register', async (req, res) => {
     const newUser = await User.create({
       username,
       email,
-      password // password will be hashed via User.js pre-save hook
+      password, // password will be hashed via User.js pre-save hook
+      avatar: req.body.avatar || undefined // Save the avatar if provided
     });
 
     // Determine if this user is admin
@@ -209,8 +210,8 @@ app.post('/api/login', async (req, res) => {
     });
 
     if (!user) {
-      return res.status(401).json({ 
-        message: 'Invalid email or password' 
+      return res.status(404).json({ 
+        message: 'User not found' 
       });
     }
 
@@ -226,9 +227,13 @@ app.post('/api/login', async (req, res) => {
     // Determine if this user is admin
     const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
     const isAdmin = adminEmail && user.email.toLowerCase() === adminEmail;
-    // Sync isAdmin field in DB
+    
+    // Sync isAdmin field in DB if it changed
+    let hasChanges = false;
     if (isAdmin !== user.isAdmin) {
+      console.log(`[AUTH] Syncing isAdmin for ${user.email}: ${isAdmin}`);
       user.isAdmin = isAdmin;
+      hasChanges = true;
     }
 
     // Generate JWT token
@@ -240,7 +245,7 @@ app.post('/api/login', async (req, res) => {
 
     // Update last seen
     user.lastSeen = new Date();
-    await user.save();
+    await user.save(); // This will save isAdmin sync too if hasChanges is true
 
     res.json({
       message: 'Login successful',
@@ -369,6 +374,47 @@ app.delete('/api/users/:username', authenticateToken, async (req, res) => {
   }
 });
 
+// PUT /api/users/:username/avatar — update user avatar
+app.put('/api/users/:username/avatar', authenticateToken, async (req, res) => {
+  console.log(`[USER_AVATAR_UPDATE] Request received for ${req.params.username}`);
+  console.log(`[USER_AVATAR_UPDATE] New avatar URL:`, req.body.avatar);
+  try {
+    const { username } = req.params;
+    const { avatar } = req.body;
+    
+    // Only the user themselves can update their avatar
+    if (req.user.username.toLowerCase() !== username.toLowerCase()) {
+      return res.status(403).json({ message: 'Can only update your own avatar' });
+    }
+    
+    const userToUpdate = await User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+    if (!userToUpdate) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    userToUpdate.avatar = avatar;
+    await userToUpdate.save();
+    
+    // Update live memory state so fetch Live Users shows it immediately
+    for (let [userId, userSockets] of activeUsers) {
+      if (userSockets.user && userSockets.user.username === userToUpdate.username) {
+        userSockets.user.avatar = avatar;
+        break;
+      }
+    }
+    
+    io.emit("live_users_update", {
+      users: await getLiveUsersData(),
+      total: activeUsers.size
+    });
+    
+    res.json({ message: 'Avatar updated successfully', avatar });
+  } catch (error) {
+    console.error('Update avatar error:', error);
+    res.status(500).json({ message: 'Server error while updating avatar' });
+  }
+});
+
 // ===== Channel REST Endpoints =====
 
 // GET /api/channels — fetch all channels
@@ -405,18 +451,31 @@ app.post('/api/channels', authenticateToken, async (req, res) => {
 
 // DELETE /api/channels/:name — admin only: delete channel
 app.delete('/api/channels/:name', authenticateToken, async (req, res) => {
+  console.log(`[DELETE CHANNEL] Request received for ${req.params.name} by user ID: ${req.user.id}`);
   try {
     const { name } = req.params;
-    if (name.toLowerCase() === 'general') return res.status(400).json({ message: 'Cannot delete General channel' });
+    if (name.toLowerCase() === 'general') {
+      console.log(`[DELETE CHANNEL] Blocked deleting General channel`);
+      return res.status(400).json({ message: 'Cannot delete General channel' });
+    }
+    
     const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
     const user = await User.findById(req.user.id);
+    console.log(`[DELETE CHANNEL] Found user email: ${user ? user.email : 'null'}, Admin email: ${adminEmail}`);
+    
     if (!user || user.email.toLowerCase() !== adminEmail) {
+      console.log(`[DELETE CHANNEL] Admin access denied`);
       return res.status(403).json({ message: 'Admin access required' });
     }
-    await Channel.deleteOne({ name });
+    
+    const result = await Channel.deleteOne({ name });
+    await Message.deleteMany({ room: name }); // Delete all message history permanently
+    console.log(`[DELETE CHANNEL] Delete operation result:`, result);
+    
     io.emit('channel_deleted', { name });
     res.json({ message: 'Channel deleted' });
   } catch (e) {
+    console.error(`[DELETE CHANNEL] Server error:`, e.stack || e);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -473,17 +532,20 @@ async function getLiveUsersData() {
   const liveUserData = [];
   
   for (let [userId, socketInfo] of activeUsers) {
-    const user = await User.findById(userId);
-    if (user) {
-      const userObj = user.toJSON();
+    // Optimization: Use the user object already stored in activeUsers
+    const userObj = socketInfo.user;
+    
+    if (userObj) {
+      const userJSON = userObj.toJSON ? userObj.toJSON() : userObj;
       liveUserData.push({
-        id: userObj._id,
-        username: userObj.username,
-        email: userObj.email,
-        avatar: userObj.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userObj.username)}&background=random`,
+        id: userId,
+        username: userJSON.username,
+        email: userJSON.email,
+        avatar: userJSON.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userJSON.username)}&background=random`,
+        isAdmin: userJSON.isAdmin || false,
         isActive: true,
-        lastSeen: new Date(),
-        createdAt: userObj.createdAt,
+        lastSeen: userJSON.lastSeen || new Date(),
+        createdAt: userJSON.createdAt,
         socketCount: socketInfo.sockets.length
       });
     }
@@ -554,7 +616,11 @@ io.on("connection", (socket) => {
 
   socket.on("join_room", async (room) => {
     try {
+      console.log(`[JOIN_ROOM] Socket ${socket.id} joining room: ${room}`);
       socket.join(room);
+      
+      const currentRooms = Array.from(socket.rooms);
+      console.log(`[JOIN_ROOM] Socket ${socket.id} is now in rooms:`, currentRooms);
       console.log("User", socket.id, "joined room:", room);
       
       // Notify other users in the room that someone joined
@@ -583,8 +649,11 @@ io.on("connection", (socket) => {
           socket.to(room).emit("user_joined", joinData);
           
           try {
+            const isPreviouslyKicked = kickedUsers.has(room) && kickedUsers.get(room).has(user.user._id);
             const joinMsg = {
-              message: `${user.user.username} joined the chat! 🎉`,
+              message: isPreviouslyKicked
+                ? `⚠️ Previously kicked user ${user.user.username} has rejoined the room.`
+                : `${user.user.username} joined the chat! 🎉`,
               author: 'System',
               room: room,
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -637,78 +706,85 @@ io.on("connection", (socket) => {
       // ────────────────────────────────────────────────────────────────────────
 
 
-      let targetSocketId = null;
       let targetUserId = null;
-      
       for (let [userId, userSockets] of activeUsers) {
         if (userSockets.user && userSockets.user.username === usernameToKick) {
           targetUserId = userId;
-          targetSocketId = userSockets.sockets[0]; // Get first socket
           break;
         }
       }
-      
-      if (targetSocketId && targetUserId) {
-        // Get the target socket
-        const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.id === targetSocketId);
-        
-        if (targetSocket) {
-          // Check if user has already been kicked from this room
+
+      if (targetUserId) {
+        // Prevent spam-click kicks: only proceed if the user is currently recognized in the room.
+        const isCurrentlyInRoom = Array.from(roomJoins.get(room) || []).some(id => id.toString() === targetUserId.toString());
+        if (!isCurrentlyInRoom) {
+          return socket.emit("kick_error", { message: "User has been kicked or is no longer in this room" });
+        }
+
+        const userSockets = activeUsers.get(targetUserId);
+        if (userSockets && userSockets.sockets.length > 0) {
+          // Track that they were kicked for future join notifications
           if (!kickedUsers.has(room)) {
             kickedUsers.set(room, new Set());
           }
-          
-          const roomKickedUsers = kickedUsers.get(room);
-          
-          // Only show kick notification if user hasn't been kicked from this room before
-          if (!roomKickedUsers.has(targetUserId)) {
-            roomKickedUsers.add(targetUserId);
-            
-            // Remove from room
-            targetSocket.leave(room);
-            
-            // Remove from room tracking
-            if (roomJoins.has(room)) {
-              roomJoins.get(room).delete(targetUserId);
-            }
-            
-            io.to(room).emit("user_kicked", {
-              username: usernameToKick,
-              room: room,
-              kickedBy: activeUsers.get(socket.userId)?.user?.username || 'Admin'
-            });
-            
-            try {
-              const kickMsg = {
-                message: `${usernameToKick} was kicked from the room! 👢`,
-                author: 'System',
+          kickedUsers.get(room).add(targetUserId);
+
+          // Kick ALL sockets for this user
+          userSockets.sockets.forEach(sId => {
+            const targetSocket = io.sockets.sockets.get(sId);
+            if (targetSocket) {
+              targetSocket.leave(room);
+              // Send private notification to each kicked socket
+              targetSocket.emit("kicked_notification", {
                 room: room,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              };
-              const savedKickMsg = await Message.create(kickMsg);
-              
-              io.to(room).emit("message", {
-                ...kickMsg,
-                _id: savedKickMsg._id ? savedKickMsg._id.toString() : Date.now().toString(),
-                timestamp: new Date().toISOString(),
-                isSystemMessage: true,
-                reactions: []
+                message: `You were kicked from ${room}`
               });
-            } catch (e) {
-              console.error("Failed to save kick system message:", e);
             }
-            
-            // Send private notification to kicked user
-            targetSocket.emit("kicked_notification", {
-              room: room,
-              message: `You were kicked from ${room}`
-            });
-            
-            console.log(`Successfully kicked ${usernameToKick} from room ${room}`);
-          } else {
-            console.log(`User ${usernameToKick} already kicked from room ${room}, skipping notification`);
-            socket.emit("kick_error", { message: "User has already been kicked from this room" });
+          });
+
+          // Remove from room tracking explicitly handling ObjectIds
+          if (roomJoins.has(room)) {
+            const roomSet = roomJoins.get(room);
+            for (let id of roomSet) {
+              if (id.toString() === targetUserId.toString()) {
+                roomSet.delete(id);
+              }
+            }
           }
+          
+          io.to(room).emit("user_kicked", {
+            username: usernameToKick,
+            room: room,
+            kickedBy: activeUsers.get(socket.userId)?.user?.username || 'Admin'
+          });
+
+          // Trigger UI update for all admins
+          io.emit("live_users_update", {
+            users: await getLiveUsersData(),
+            total: activeUsers.size
+          });
+          
+          try {
+            const kickMsg = {
+              message: `${usernameToKick} was kicked from the room! 👢`,
+              author: 'System',
+              room: room,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
+            const savedKickMsg = await Message.create(kickMsg);
+            
+            io.to(room).emit("message", {
+              ...kickMsg,
+              _id: savedKickMsg._id ? savedKickMsg._id.toString() : Date.now().toString(),
+              timestamp: new Date().toISOString(),
+              isSystemMessage: true,
+              reactions: []
+            });
+          } catch (e) {
+            console.error("Failed to save kick system message:", e);
+          }
+          
+          console.log(`Successfully kicked ${usernameToKick} and all their sockets from room ${room}`);
         }
       } else {
         console.log("User not found for kick:", usernameToKick);
@@ -823,9 +899,12 @@ io.on("connection", (socket) => {
         reactions: []
       };
       
-      console.log("Broadcasting message to room:", data.room);
+      console.log(`[MESSAGE_BROADCAST] Broadcasting message from ${data.author} to room ${data.room}`);
+      const socketsInRoom = await io.in(data.room).allSockets();
+      console.log(`[MESSAGE_BROADCAST] Sockets in target room ${data.room}:`, Array.from(socketsInRoom));
+      
       io.to(data.room).emit("message", broadcastData);
-      console.log("Message broadcasted successfully to all users in room");
+      console.log("[MESSAGE_BROADCAST] Emit called successfully");
     } catch (error) {
       console.error("Error saving message:", error);
     }
@@ -896,8 +975,18 @@ io.on("connection", (socket) => {
         userSockets.sockets = userSockets.sockets.filter(id => id !== socket.id);
         
         if (userSockets.sockets.length === 0) {
-          // User has no more active connections
+          // User has no more active connections — remove from all room tracking
           activeUsers.delete(userId);
+
+          // Clean up roomJoins so they get a proper re-join notification next time
+          roomJoins.forEach((usersInRoom, room) => {
+            for (let id of usersInRoom) {
+              if (id.toString() === userId.toString()) {
+                usersInRoom.delete(id);
+                break;
+              }
+            }
+          });
           
           // Mark user as inactive in storage
           try {

@@ -90,6 +90,7 @@ const DBWrapper = {
     if (useMongoDB && !mongoose.Types.ObjectId.isValid(args[0])) return Promise.resolve(null);
     return Message.findByIdAndDelete(...args);
   },
+  deleteMany: (...args) => Message.deleteMany(...args),
 };
 
 module.exports = DBWrapper;

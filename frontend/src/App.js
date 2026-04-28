@@ -22,6 +22,20 @@ function App() {
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
+  const getAvatarSource = (avatarPath, fallbackName) => {
+    if (!avatarPath) return `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&background=random`;
+    if (avatarPath.startsWith('/uploads')) return `${BACKEND_URL}${avatarPath}`;
+    return avatarPath;
+  };
+
+  const handleAvatarError = (e) => {
+    if (!e.target.dataset.failed) {
+      e.target.dataset.failed = "true";
+      // Fully valid Base64 encoded generic SVG user icon
+      e.target.src = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAyNCAyNCcgZmlsbD0nIzY2Nic+PGNpcmNsZSBjeD0nMTInIGN5PSc4JyByPSc0Jy8+PHBhdGggZD0nTTEyIDE0Yy00LjQyIDAtOCAyLjU4LTggNXYxaDE2di0xYzAtMi40Mi0zLjU4LTUtOC01eicvPjwvc3ZnPg==";
+    }
+  };
+
   const getMessageIdentifier = (msg) => msg._id || `${msg.author}-${msg.time}-${msg.message}`;
   const emojiPickerRef = useRef(null);
   const [channels, setChannels] = useState(['General', 'Sales', 'Marketing', 'Design', 'Tech']);
@@ -40,10 +54,15 @@ function App() {
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [kickedFromPanel, setKickedFromPanel] = useState(new Set());
   // const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
   const currentRoomRef = useRef(''); // Always holds the current room for use in socket reconnect
+  
+  useEffect(() => {
+    setKickedFromPanel(new Set());
+  }, [room]);
 
   useEffect(() => {
     console.log('Setting up socket connection...');
@@ -63,11 +82,16 @@ function App() {
           if (currentRoomRef.current) {
             setTimeout(() => newSocket.emit('join_room', currentRoomRef.current), 300);
           }
-          // Fetch live users shortly after so server has time to process auth
+          // Fetch live users and all users shortly after so server has time to process auth
           setTimeout(() => {
             fetch(`${BACKEND_URL}/api/live-users`)
               .then(r => r.json())
               .then(d => { if (d.users) setLiveUsers(d.users); })
+              .catch(() => {});
+            
+            fetch(`${BACKEND_URL}/api/users`)
+              .then(r => r.json())
+              .then(d => { if (d.users) setAllUsers(d.users); })
               .catch(() => {});
           }, 600);
         } catch (e) {}
@@ -83,11 +107,16 @@ function App() {
     });
 
     newSocket.on('message', (data) => {
-      console.log('Message received in frontend:', data);
-      setRoomChats(prev => ({
-        ...prev,
-        [data.room]: [...(prev[data.room] || []), data]
-      }));
+      console.log('[FRONTEND_DEBUG] Message event received:', data);
+      console.log('[FRONTEND_DEBUG] Current room state:', room);
+      setRoomChats(prev => {
+        const updated = {
+          ...prev,
+          [data.room]: [...(prev[data.room] || []), data]
+        };
+        console.log(`[FRONTEND_DEBUG] Updated chat length for ${data.room}:`, updated[data.room].length);
+        return updated;
+      });
     });
 
     newSocket.on('channel_created', (data) => {
@@ -96,6 +125,8 @@ function App() {
 
     newSocket.on('channel_deleted', (data) => {
       setChannels(prev => prev.filter(c => c !== data.name));
+      // Boot users out of the deleted channel
+      setRoom(prevRoom => prevRoom === data.name ? 'General' : prevRoom);
     });
 
     newSocket.on('typing_users', (users) => {
@@ -103,6 +134,7 @@ function App() {
     });
 
     newSocket.on('previous_messages', (data) => {
+      console.log('[FRONTEND_DEBUG] previous_messages event received:', data.room, 'count:', data.messages.length);
       const { messages, room: messageRoom } = data;
       setRoomChats(prev => ({
         ...prev,
@@ -115,11 +147,21 @@ function App() {
     });
 
     newSocket.on('user_joined', (data) => {
-      console.log('User joined event received (handled via backend message broadcast):', data);
+      console.log('User joined event received:', data);
+      if (data && data.room === currentRoomRef.current) {
+        setKickedFromPanel(prev => {
+          const next = new Set(prev);
+          next.delete(data.username);
+          return next;
+        });
+      }
     });
 
     newSocket.on('user_kicked', (data) => {
-      console.log('User kicked event received (handled via backend message broadcast):', data);
+      console.log('User kicked event received:', data);
+      if (data && data.room === currentRoomRef.current) {
+        setKickedFromPanel(prev => new Set(prev).add(data.username));
+      }
     });
 
     newSocket.on('kicked_notification', (data) => {
@@ -281,6 +323,19 @@ function App() {
     return () => clearTimeout(typingTimeout);
   }, [message, socket, room, username]);
 
+  // Poll live users every 10 seconds so the count stays fresh even if a
+  // socket event is missed (e.g. brief network interruption).
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const interval = setInterval(() => {
+      fetch(`${BACKEND_URL}/api/live-users`)
+        .then(r => r.json())
+        .then(d => { if (d.users) setLiveUsers(d.users); })
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn]);
+
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -348,6 +403,8 @@ function App() {
     }
   };
 
+  // handleLogout is defined below after handleLogin
+
   const handleLogin = async () => {
     if (!tempUsername.trim() || !password.trim()) {
       setLoginError('Please enter username and password');
@@ -395,8 +452,23 @@ function App() {
         
         // Delay fetch so server processes authenticate event first
         setTimeout(fetchLiveUsers, 800);
+        fetchAllUsers();
         fetchChannels();
       } else {
+        if (response.status === 404) {
+          // User not found - attempt auto-registration
+          console.log('User not found, attempting registration...');
+        } else if (response.status === 401) {
+          // Explicitly wrong password
+          setLoginError('Incorrect password. Please try again.');
+          setIsCheckingUsername(false);
+          return;
+        } else {
+          setLoginError(data.message || 'Login failed');
+          setIsCheckingUsername(false);
+          return;
+        }
+
         const registerResponse = await fetch(`${BACKEND_URL}/api/register`, {
           method: 'POST',
           headers: {
@@ -434,9 +506,16 @@ function App() {
           
           // Delay fetch so server processes authenticate event first
           setTimeout(fetchLiveUsers, 800);
+          fetchAllUsers();
           fetchChannels();
         } else {
-          setLoginError(registerData.message || 'Registration failed');
+          // If registration also fails, show the more relevant error
+          // If login gave 401 and register gave 400 (exists), then it was a wrong password.
+          if (registerData.message && registerData.message.includes('already exists')) {
+            setLoginError('Invalid password for this account.');
+          } else {
+            setLoginError(registerData.message || 'Authentication failed');
+          }
           setIsCheckingUsername(false);
         }
       }
@@ -448,19 +527,26 @@ function App() {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setIsLoggedIn(false);
     setUsername('');
     setRoom('');
+    currentRoomRef.current = '';
     setRoomChats({});
     setPassword('');
     setUserAvatar('');
     setTempAvatar('');
     setIsAdmin(false);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    
-    // Clear chats on logout
-    setRoomChats({});
+    setLiveUsers([]);
+    setAllUsers([]);
+    // Disconnect existing socket so server removes this user from live tracking,
+    // then reconnect to get a fresh unauthenticated socket for the next login.
+    if (socket) {
+      socket.disconnect();
+      const newSocket = io(BACKEND_URL);
+      setSocket(newSocket);
+    }
   };
 
   const changeUsername = () => {
@@ -471,14 +557,30 @@ function App() {
     }
   };
 
-  const changeAvatar = () => {
+  const changeAvatar = async () => {
     if (tempAvatar.trim()) {
-      setUserAvatar(tempAvatar);
+      const newAvatar = tempAvatar.trim();
+      setUserAvatar(newAvatar);
       setShowAvatarModal(false);
       setTempAvatar('');
       const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-      currentUser.avatar = tempAvatar;
+      currentUser.avatar = newAvatar;
       localStorage.setItem('user', JSON.stringify(currentUser));
+      
+      try {
+        const token = localStorage.getItem('token');
+        await fetch(`${BACKEND_URL}/api/users/${encodeURIComponent(username)}/avatar`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ avatar: newAvatar })
+        });
+        fetchAllUsers();
+      } catch (err) {
+        console.error('Error saving avatar to backend:', err);
+      }
     }
   };
 
@@ -754,12 +856,17 @@ function App() {
   };
 
   const getUserAvatar = (author) => {
+    let path = null;
     if (liveUsers && liveUsers.length > 0) {
       const user = liveUsers.find(u => u.username === author);
-      if (user && user.avatar) return user.avatar;
+      if (user && user.avatar && !user.avatar.includes('ui-avatars.com')) path = user.avatar;
     }
-    if (author === username && userAvatar) return userAvatar;
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(author)}&background=random`;
+    if (!path && allUsers && allUsers.length > 0) {
+      const user = allUsers.find(u => u.username === author);
+      if (user && user.avatar && !user.avatar.includes('ui-avatars.com')) path = user.avatar;
+    }
+    if (!path && author === username && userAvatar && !userAvatar.includes('ui-avatars.com')) path = userAvatar;
+    return getAvatarSource(path, author);
   };
 
   return (
@@ -781,7 +888,7 @@ function App() {
               <div className="input-group">
                 <input 
                   type="text" 
-                  placeholder="Enter your email or username"
+                  placeholder="Username/Email (logs in or creates account)"
                   value={tempUsername}
                   onChange={(e) => {
                     setTempUsername(e.target.value.toLowerCase());
@@ -875,12 +982,20 @@ function App() {
                   onClick={() => {
                     setShowAdminPanel(true);
                     fetchAllUsers();
+                    fetchLiveUsers();
                   }}
                   title="Admin Panel"
                 >
                   ⚙️ Admin
                 </button>
               )}
+              <button
+                className="logout-btn"
+                onClick={handleLogout}
+                title="Logout"
+              >
+                🚪 Logout
+              </button>
             </div>
           </div>
           <div className="chat-container">
@@ -1099,11 +1214,9 @@ function App() {
                 <div key={user.id} className="user-card">
                   <div className="user-avatar">
                     <img 
-                      src={user.avatar} 
+                      src={getAvatarSource(user.avatar, user.username)} 
                       alt={user.username}
-                      onError={(e) => {
-                        e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`;
-                      }}
+                      onError={handleAvatarError}
                     />
                     <div className="live-indicator">🟢 LIVE</div>
                   </div>
@@ -1115,15 +1228,6 @@ function App() {
                       {user.isActive ? 'Active' : 'Inactive'}
                     </div>
                   </div>
-                  {room && user.username !== username && (
-                    <button 
-                      className="kick-btn"
-                      onClick={() => kickUser(user.username)}
-                      title={`Kick ${user.username} from ${room}`}
-                    >
-                      👢 Kick
-                    </button>
-                  )}
                 </div>
               ))}
             </div>
@@ -1142,46 +1246,38 @@ function App() {
             </div>
 
             <div className="admin-section">
-              <h3 className="admin-section-title">👥 Manage All Users</h3>
+              <h3 className="admin-section-title">👥 Manage Active Users</h3>
               <input 
                 type="text" 
                 className="admin-search-bar" 
-                placeholder="Search registered users..." 
+                placeholder="Search active users..." 
                 value={adminSearchQuery} 
                 onChange={e => setAdminSearchQuery(e.target.value)} 
               />
               <div className="admin-user-list">
-                {allUsers.filter(u => u.username !== username && u.username.toLowerCase().includes(adminSearchQuery.toLowerCase())).length === 0 && (
-                  <div className="admin-empty">No users found</div>
+                {allUsers.filter(u => u.username !== username && !kickedFromPanel.has(u.username) && liveUsers.some(lu => lu.username === u.username) && u.username.toLowerCase().includes(adminSearchQuery.toLowerCase())).length === 0 && (
+                  <div className="admin-empty">No active users found</div>
                 )}
-                {allUsers.filter(u => u.username !== username && u.username.toLowerCase().includes(adminSearchQuery.toLowerCase())).map(user => {
+                {allUsers.filter(u => u.username !== username && !kickedFromPanel.has(u.username) && liveUsers.some(lu => lu.username === u.username) && u.username.toLowerCase().includes(adminSearchQuery.toLowerCase())).map(user => {
                   const isOnline = liveUsers.some(lu => lu.username === user.username);
                   return (
                     <div key={user.id} className="admin-user-row">
                       <img
-                        src={user.avatar}
+                        src={getAvatarSource(user.avatar, user.username)}
                         alt={user.username}
                         className="admin-user-avatar"
-                        onError={e => e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
+                        onError={handleAvatarError}
                       />
                       <span className="admin-user-name">
                         {user.username}
                         <span className={`admin-status-dot ${isOnline ? 'online' : 'offline'}`} title={isOnline ? "Online" : "Offline"}></span>
                       </span>
-                      {isOnline && (
-                        <button
-                          className="admin-kick-btn"
-                          onClick={() => { kickUser(user.username); }}
-                        >
-                          👢 Kick
-                        </button>
-                      )}
                       <button
-                        className="admin-delete-account-btn"
-                        onClick={() => deleteAccount(user.username)}
-                        title="Delete User Account"
+                        className="admin-kick-btn"
+                        onClick={() => kickUser(user.username)}
+                        title="Kick User"
                       >
-                        🗑️
+                        👢 Kick
                       </button>
                     </div>
                   );

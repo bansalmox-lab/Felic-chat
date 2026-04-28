@@ -57,6 +57,15 @@ const Message = {
     const deleted = messages[idx];
     messages.splice(idx, 1);
     return deleted;
+  },
+
+  deleteMany: async function(query) {
+    if (query && query.room) {
+      const initialLength = messages.length;
+      messages = messages.filter(msg => msg.room !== query.room);
+      return { deletedCount: initialLength - messages.length };
+    }
+    return { deletedCount: 0 };
   }
 };
 
