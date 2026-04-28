@@ -874,73 +874,139 @@ function App() {
       <TitleBar />
       {!isLoggedIn ? (
         <div className="login-container">
+          {/* Animated background orbs */}
+          <div className="login-orb login-orb-1" />
+          <div className="login-orb login-orb-2" />
+          <div className="login-orb login-orb-3" />
+
           <div className="login-panel">
-            <div className="login-header">
-              <div className="instagram-logo">
-                <div className="logo-gradient">Felic</div>
-                <div className="logo-text">Chat</div>
+            {/* Logo */}
+            <div className="login-logo-wrap">
+              <div className="login-logo-icon">
+                <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="20" cy="20" r="20" fill="url(#lg1)"/>
+                  <path d="M12 15h16M12 20h10M12 25h13" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+                  <defs>
+                    <linearGradient id="lg1" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                      <stop stopColor="#818cf8"/>
+                      <stop offset="1" stopColor="#a855f7"/>
+                    </linearGradient>
+                  </defs>
+                </svg>
               </div>
-              <h2>Welcome to Felic Chat</h2>
-              <p>Connect with friends and join channels</p>
+              <div className="login-logo-text">
+                <span className="login-logo-felic">Felic</span>
+                <span className="login-logo-chat">Chat</span>
+              </div>
             </div>
-            
+
+            <h2 className="login-title">Sign in to your workspace</h2>
+            <p className="login-subtitle">New here? We'll create your account automatically.</p>
+
             <div className="login-form">
-              <div className="input-group">
-                <input 
-                  type="text" 
-                  placeholder="Username/Email (logs in or creates account)"
-                  value={tempUsername}
-                  onChange={(e) => {
-                    setTempUsername(e.target.value.toLowerCase());
-                    setLoginError('');
-                  }}
-                  onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                  className={`login-input ${loginError ? 'error' : ''}`}
-                  disabled={isCheckingUsername}
-                />
-                <div style={{ height: '12px' }}></div>
-                <input 
-                  type="password" 
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setLoginError('');
-                  }}
-                  onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                  className={`login-input ${loginError ? 'error' : ''}`}
-                  disabled={isCheckingUsername}
-                />
-                <div style={{ height: '12px' }}></div>
-                <input 
-                  type="text" 
-                  placeholder="Avatar (optional)"
-                  value={tempAvatar}
-                  onChange={(e) => {
-                    setTempAvatar(e.target.value);
-                    setLoginError('');
-                  }}
-                  onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                  className={`login-input ${loginError ? 'error' : ''}`}
-                  disabled={isCheckingUsername}
-                />
-                {loginError && <div className="error-message">{loginError}</div>}
+              {/* Username / Email */}
+              <div className="login-field">
+                <label className="login-label">Username or Email</label>
+                <div className="login-input-wrap">
+                  <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
+                    <path d="M10 10a4 4 0 100-8 4 4 0 000 8zM2 18c0-4 3.58-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="you@example.com"
+                    value={tempUsername}
+                    onChange={(e) => { setTempUsername(e.target.value.toLowerCase()); setLoginError(''); }}
+                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                    className={`login-input${loginError ? ' error' : ''}`}
+                    disabled={isCheckingUsername}
+                    autoComplete="username"
+                  />
+                </div>
               </div>
-              <button 
+
+              {/* Password */}
+              <div className="login-field">
+                <label className="login-label">Password</label>
+                <div className="login-input-wrap">
+                  <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
+                    <rect x="3" y="9" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.6"/>
+                    <path d="M7 9V6a3 3 0 016 0v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  </svg>
+                  <input
+                    type="password"
+                    placeholder="Min. 6 characters"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setLoginError(''); }}
+                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                    className={`login-input${loginError ? ' error' : ''}`}
+                    disabled={isCheckingUsername}
+                    autoComplete="current-password"
+                  />
+                </div>
+              </div>
+
+              {/* Avatar URL + live preview */}
+              <div className="login-field">
+                <label className="login-label">Avatar URL <span className="login-optional">(optional)</span></label>
+                <div className="login-avatar-row">
+                  <div className="login-avatar-preview">
+                    <img
+                      src={tempAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(tempUsername || 'You')}&background=818cf8&color=fff`}
+                      alt="avatar preview"
+                      onError={(e) => { e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(tempUsername || 'You')}&background=818cf8&color=fff`; }}
+                    />
+                  </div>
+                  <div className="login-input-wrap login-avatar-input-wrap">
+                    <svg className="login-field-icon" viewBox="0 0 20 20" fill="none">
+                      <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.6"/>
+                      <path d="M6 14c.9-2 5.1-2 6 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                      <circle cx="10" cy="8" r="2" stroke="currentColor" strokeWidth="1.6"/>
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={tempAvatar}
+                      onChange={(e) => { setTempAvatar(e.target.value); setLoginError(''); }}
+                      onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                      className="login-input"
+                      disabled={isCheckingUsername}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {loginError && (
+                <div className="login-error">
+                  <svg viewBox="0 0 20 20" fill="none">
+                    <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.6"/>
+                    <path d="M10 6v4M10 14h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  </svg>
+                  {loginError}
+                </div>
+              )}
+
+              <button
                 onClick={handleLogin}
                 disabled={!tempUsername.trim() || !password.trim() || isCheckingUsername}
                 className="login-button"
               >
-                {isCheckingUsername ? 'Checking...' : 'Continue'}
+                {isCheckingUsername ? (
+                  <span className="login-spinner" />
+                ) : (
+                  <>
+                    Continue
+                    <svg viewBox="0 0 20 20" fill="none" style={{width:16,height:16,marginLeft:8}}>
+                      <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </>
+                )}
               </button>
-              <div className="login-rules">
-                <p>Login requirements:</p>
-                <ul>
-                  <li>At least 3 characters</li>
-                  <li>Letters, numbers, and underscores only</li>
-                  <li>Must be unique</li>
-                  <li>Password: At least 6 characters</li>
-                </ul>
+
+              <div className="login-features">
+                <div className="login-feature"><span>⚡</span>Real-time messaging</div>
+                <div className="login-feature"><span>🔒</span>Secure &amp; private</div>
+                <div className="login-feature"><span>🌐</span>Multi-channel</div>
+              </div>
               </div>
             </div>
           </div>
